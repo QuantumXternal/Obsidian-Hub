@@ -1816,7 +1816,7 @@ end
 
 -- Forward declarations: AutoSteal travel reuses these movement modules,
 -- which are defined below. (Luau locals must be declared before use.)
-local Glide, Blink, Fly, AutoTreadmill
+local Glide, Blink, Fly, AutoTreadmill, PlaceHatch
 
 -- AutoSteal -------------------------------------------------------
 -- TODO: adjust the candidate field names below to this game's exact
@@ -1832,16 +1832,22 @@ local AutoSteal = {
     MoveSpeed = 500,
     BlinkDistance = 100,
     CycleDelay = 1.5,
+    HoverHeight = 12, -- Fly hover above ground (0-300); Glide fixed 12
     MinValue = 0,
     MaxValue = 1000000000,
     BestValueOnly = false,
+    PlaceEnabled = false, -- deposit after base return (user toggle)
+    HatchEnabled = false, -- hatch when ready (user toggle)
     MinWeight = 0,
     MaxWeight = 1000000,
     RarityAllow = {}, -- empty = allow all; TODO: adjust names via DiscoverFilters
     MutationAllow = {}, -- empty = allow all; TODO: adjust names via DiscoverFilters
     -- Pinned rarity display order (real names still come from DiscoverFilters).
     -- TODO: adjust pin list if this game adds/removes rarities.
-    PinRarities = { "Secret", "Eternal", "Divine", "Cosmic", "Mythic", "Legendary", "Rare", "Uncommon", "Common" },
+    -- Rarity rank, highest to lowest: Divine first, Common last.
+    -- TODO: adjust rank if this game adds/removes rarities.
+    PinRarities = { "Divine", "Eternal", "Secret", "Cosmic", "Mythic", "Legendary", "Epic", "Rare", "Uncommon", "Common" },
+    SecretFirst = false, -- Divine/Eternal/Secret jump queue in any mode
     DiscoveredRarities = {},
     DiscoveredMutations = {},
     EggState = nil,
@@ -2192,7 +2198,22 @@ function AutoSteal:GetMatches()
                 end
             end
         end
+        local mode = self.FilterMode or "Rarity"
+        local secretFirst = self.SecretFirst and true or false
         table.sort(out, function(a, b)
+            if secretFirst then
+                local at, bt = (self:RankOf(a.Rarity) <= 3), (self:RankOf(b.Rarity) <= 3)
+                if at ~= bt then
+                    return at
+                end
+            end
+            if mode == "Rarity" then
+                local ar, br = self:RankOf(a.Rarity), self:RankOf(b.Rarity)
+                if ar ~= br then
+                    return ar < br
+                end
+                return a.Dist < b.Dist
+            end
             if a.Value ~= b.Value then
                 return a.Value > b.Value
             end
@@ -2202,6 +2223,15 @@ function AutoSteal:GetMatches()
     self.LastMatches = out
     self:UpdatePreview(out)
     return out
+end
+
+-- Tier rank from the pinned sequence (Divine first). Unknown = last.
+function AutoSteal:RankOf(rarity)
+    local idx = table.find(self.PinRarities, tostring(rarity or "?"))
+    if idx then
+        return idx
+    end
+    return 999
 end
 
 function AutoSteal:UpdatePreview(matches)
@@ -2280,7 +2310,7 @@ end
 -- TODO: adjust Walk steering if this game server-clamps WalkSpeed.
 function AutoSteal:TravelTo(pos, token)
     local method = self.MovementMethod or "Walk"
-    local speed = math.clamp(tonumber(self.MoveSpeed) or 500, 16, 5000)
+    local speed = math.clamp(tonumber(self.MoveSpeed) or 500, 100, 1500)
     self.StealDriving = true
     if method == "Blink" then
         pcall(function()
@@ -2300,7 +2330,7 @@ function AutoSteal:TravelTo(pos, token)
             end
             pcall(function()
                 hrp.CFrame = CFrame.new(hrp.Position, pos)
-                Blink.Distance = math.clamp(tonumber(self.BlinkDistance) or 20, 5, 100)
+                Blink.Distance = math.clamp(tonumber(self.BlinkDistance) or 100, 100, 1500)
                 Blink:BlinkNow()
             end)
             task.wait(0.55)
@@ -2310,6 +2340,7 @@ function AutoSteal:TravelTo(pos, token)
         return
     end
     if method == "Fly" then
+        local hover = math.clamp(tonumber(self.HoverHeight) or 12, 0, 300)
         pcall(function()
             Fly.Speed = speed
             if not Fly.Enabled then
@@ -2323,8 +2354,10 @@ function AutoSteal:TravelTo(pos, token)
             if not hrp then
                 break
             end
-            local dir = pos - hrp.Position
-            if dir.Magnitude <= 6 then
+            local aim = pos + Vector3.new(0, hover, 0)
+            local dir = aim - hrp.Position
+            local flat = Vector3.new(dir.X, 0, dir.Z)
+            if flat.Magnitude <= 6 then
                 break
             end
             pcall(function()
@@ -2344,7 +2377,8 @@ function AutoSteal:TravelTo(pos, token)
         self.StealDriving = false
         return
     end
-    -- Walk / Glide share the MoveTo steering loop (Glide only softens falls).
+    -- Walk grounded; Glide shares steering but holds +12 hover (built-in).
+    local glideHover = 12
     pcall(function()
         if method == "Glide" then
             Glide.Speed = speed
@@ -2367,13 +2401,23 @@ function AutoSteal:TravelTo(pos, token)
             break
         end
         local offset = pos - hrp.Position
-        if offset.Magnitude <= 6 then
+        local arrived = false
+        if method == "Glide" then
+            arrived = Vector3.new(offset.X, 0, offset.Z).Magnitude <= 6
+        else
+            arrived = offset.Magnitude <= 6
+        end
+        if arrived then
             break
         end
         pcall(function()
             local hum = GetHumanoid()
             if hum then
                 hum.WalkSpeed = speed
+            end
+            if method == "Glide" and Glide.BV and Glide.BV.Parent == hrp then
+                local dy = (pos.Y + glideHover) - hrp.Position.Y
+                Glide.BV.Velocity = Vector3.new(0, math.clamp(dy * 2, -30, 30), 0)
             end
             char:MoveTo(hrp.Position + offset.Unit * math.min(offset.Magnitude, speed * dt))
         end)
@@ -2402,14 +2446,161 @@ function AutoSteal:StopMovement()
     end
 end
 
-function AutoSteal:StealOnce()
-    local matches = self:GetMatches()
-    if #matches == 0 then
-        if Notify then
-            Notify("AutoSteal: no matches")
+-- Egg detector: how many eggs the save holds (nil when unreadable).
+function AutoSteal:EggCount()
+    local ok, res = pcall(function()
+        if not self.Save then
+            return nil
         end
-        return
+        local d = self.Save.Get()
+        if not d or not d.EggInventory then
+            return nil
+        end
+        local n = 0
+        for _ in pairs(d.EggInventory) do
+            n = n + 1
+        end
+        return n
+    end)
+    if ok then
+        return res
     end
+    return nil
+end
+
+-- True when an egg is in hand right now: tool equipped, or the save
+-- grew since beforeCount. Same Tool pattern as KillAura:CanUseTool.
+function AutoSteal:IsHoldingEgg(beforeCount)
+    local held = false
+    pcall(function()
+        local char = GetCharacter()
+        if char and char:FindFirstChildOfClass("Tool") then
+            held = true
+        end
+    end)
+    if not held and beforeCount ~= nil then
+        pcall(function()
+            local now = self:EggCount()
+            if now ~= nil and now > beforeCount then
+                held = true
+            end
+        end)
+    end
+    return held
+end
+
+-- True when this exact target can still be stolen (record + prompt exist).
+function AutoSteal:TargetStillThere(best)
+    local ok, res = pcall(function()
+        if not self.EggState then
+            return false
+        end
+        local f = self.EggState.ReadFieldEggs()
+        if not f or not f.Records then
+            return false
+        end
+        for _, egg in pairs(f.Records) do
+            local pos = self:GetEggPos(egg)
+            if pos and (pos - best.Pos).Magnitude <= 10 then
+                local areaOk = true
+                if typeof(egg) == "table" and egg.AreaId ~= nil and best.Area ~= "?" then
+                    areaOk = tostring(egg.AreaId) == tostring(best.Area)
+                end
+                if areaOk and self:GetPrompt(pos) ~= nil then
+                    return true
+                end
+            end
+        end
+        return false
+    end)
+    if ok then
+        return res
+    end
+    return false
+end
+
+-- After a hover arrival (Fly/Glide), drop to the egg for a grounded
+-- grab like reference hubs do, then fire. No-op for Walk/Blink.
+function AutoSteal:LandForGrab(pos)
+    pcall(function()
+        local m = self.MovementMethod or "Walk"
+        if m ~= "Fly" and m ~= "Glide" then
+            return
+        end
+        local hrp = GetHRP()
+        if not hrp then
+            return
+        end
+        hrp.CFrame = CFrame.new(pos.X, pos.Y + 3, pos.Z)
+        if Fly.BV then
+            Fly.BV.Velocity = Vector3.new(0, 0, 0)
+        end
+        task.wait(0.3)
+    end)
+end
+
+-- One grab attempt at an arrived target. Returns "held", "retry"
+-- (still stealable), or "gone".
+function AutoSteal:GrabAt(best, token)
+    if not self.Enabled or token ~= self.Token then
+        return "gone"
+    end
+    local before = self:EggCount()
+    task.wait(0.4)
+    local prompt = self:GetPrompt(best.Pos)
+    if prompt and fireproximityprompt then
+        pcall(function()
+            fireproximityprompt(prompt)
+        end)
+        task.wait(0.5)
+        if self:IsHoldingEgg(before) then
+            return "held"
+        end
+        pcall(function()
+            local again = self:GetPrompt(best.Pos)
+            if again and fireproximityprompt then
+                fireproximityprompt(again)
+            end
+        end)
+        task.wait(0.5)
+        if self:IsHoldingEgg(before) then
+            return "held"
+        end
+    else
+        warn("[Quantum Hub] AutoSteal: no prompt at target")
+    end
+    if self:TargetStillThere(best) then
+        return "retry"
+    end
+    return "gone"
+end
+
+-- Fresh matches excluding positions already proven unstealable.
+function AutoSteal:PickFresh(ignored)
+    local fresh = self:GetMatches()
+    if not ignored or #ignored == 0 then
+        return fresh
+    end
+    local out = {}
+    for _, m in ipairs(fresh) do
+        local skip = false
+        for _, ip in ipairs(ignored) do
+            local ok, close = pcall(function()
+                return (m.Pos - ip).Magnitude <= 10
+            end)
+            if ok and close then
+                skip = true
+                break
+            end
+        end
+        if not skip then
+            table.insert(out, m)
+        end
+    end
+    return out
+end
+
+function AutoSteal:PickBest(matches)
     local best = matches[1]
     if self.BestValueOnly then
         for _, m in ipairs(matches) do
@@ -2418,39 +2609,99 @@ function AutoSteal:StealOnce()
             end
         end
     end
-    local token = self.Token
-    local lastPos = best.Pos
-    self:TravelTo(best.Pos, token)
+    return best
+end
+
+function AutoSteal:GoBaseAndDeposit(token, lastPos)
+    if not self.ReturnToBase then
+        return
+    end
+    self:TravelTo(BASE_CFRAME.Position, token)
     if not self.Enabled or token ~= self.Token then
         return
     end
-    task.wait(0.4)
-    local prompt = self:GetPrompt(best.Pos)
-    if prompt and fireproximityprompt then
-        pcall(function()
-            fireproximityprompt(prompt)
-        end)
-        task.wait(1)
-        pcall(function()
-            local again = self:GetPrompt(best.Pos)
-            if again and fireproximityprompt then
-                fireproximityprompt(again)
-            end
-        end)
-        if Notify then
-            Notify("AutoSteal: stole " .. tostring(best.Rarity) .. " (" .. tostring(best.Value) .. ")")
+    pcall(function()
+        if self.PlaceEnabled then
+            PlaceHatch:PlaceOnce()
         end
-    else
-        warn("[Quantum Hub] AutoSteal: no prompt" .. ((fireproximityprompt and "") or " (missing fireproximityprompt)"))
-        if Notify then
-            Notify("AutoSteal: no prompt found")
+    end)
+    pcall(function()
+        if self.HatchEnabled then
+            PlaceHatch:HatchOnce()
         end
+    end)
+    if self.GoBackOut and self.Enabled and token == self.Token and lastPos then
+        self:TravelTo(lastPos, token)
     end
-    if self.ReturnToBase then
-        self:TravelTo(BASE_CFRAME.Position, token)
-        task.wait(0.5)
-        if self.GoBackOut and self.Enabled and token == self.Token and lastPos then
-            self:TravelTo(lastPos, token)
+end
+
+function AutoSteal:StealOnce()
+    local token = self.Token
+    local ignored = {}
+    local matches = self:PickFresh(ignored)
+    if #matches == 0 then
+        if Notify then
+            Notify("AutoSteal: no matches")
+        end
+        -- Nothing to steal: hold base instead of idling in the field.
+        if self.ReturnToBase then
+            self:TravelTo(BASE_CFRAME.Position, token)
+        end
+        return
+    end
+    local best = self:PickBest(matches)
+    local goneStreak = 0
+    while self.Enabled and token == self.Token do
+        self:TravelTo(best.Pos, token)
+        if not self.Enabled or token ~= self.Token then
+            return
+        end
+        self:LandForGrab(best.Pos)
+        if not self.Enabled or token ~= self.Token then
+            return
+        end
+        local result = self:GrabAt(best, token)
+        if not self.Enabled or token ~= self.Token then
+            return
+        end
+        if result == "held" then
+            -- INSTANT base on the success path: no extra waits.
+            if Notify then
+                Notify("AutoSteal: stole " .. tostring(best.Rarity) .. " (" .. tostring(best.Value) .. ")")
+            end
+            self:GoBaseAndDeposit(token, best.Pos)
+            return
+        end
+        if result == "retry" then
+            -- Same egg still stealable: re-travel and re-fire until held.
+            goneStreak = 0
+            task.wait(0.25)
+        else
+            goneStreak = goneStreak + 1
+            if goneStreak < 3 then
+                task.wait(0.5)
+            else
+                -- Fully stolen/gone: blacklist this spot and retarget
+                -- immediately with no base trip.
+                table.insert(ignored, best.Pos)
+                local fresh = self:PickFresh(ignored)
+                if #fresh > 0 then
+                    best = self:PickBest(fresh)
+                    goneStreak = 0
+                    if Notify then
+                        Notify("AutoSteal: retargeting " .. tostring(best.Rarity))
+                    end
+                else
+                    -- Nothing else selected: back to base, resume cycling.
+                    if Notify then
+                        Notify("AutoSteal: target gone, returning")
+                    end
+                    if self.ReturnToBase then
+                        self:TravelTo(BASE_CFRAME.Position, token)
+                    end
+                    return
+                end
+            end
         end
     end
 end
@@ -2538,7 +2789,7 @@ end
 -- SpeedBypass -----------------------------------------------------
 local SpeedBypass = {
     Enabled = false,
-    WalkSpeed = 2000,
+    WalkSpeed = 1500,
     SafeMode = false,
     Hooked = false,
     SpeedConn = nil,
@@ -2755,6 +3006,10 @@ end
 
 function Glide:Refresh()
     if self.Enabled and self.BV then
+        -- Yield while AutoSteal drives the same BodyVelocity (hover hold).
+        if AutoSteal.StealDriving then
+            return
+        end
         pcall(function()
             local hrp = GetHRP()
             if not hrp then
@@ -3244,6 +3499,50 @@ function GraphicsOpt:SetLevel(level)
     end
 end
 
+-- PlaceHatch --------------------------------------------------------
+-- Deposit + hatch helpers used by AutoSteal after base return (only when
+-- the user enables them). Remotes are resolved at runtime from candidate
+-- paths because the exact names vary by update.
+-- TODO: adjust candidate remote paths to this game's exact names.
+-- (assigned, not re-declared: forward-declared above for AutoSteal)
+PlaceHatch = {
+    PlaceRemotes = { "RF/EggWorld/AskPlaceEgg", "RE/EggWorld/PlaceEgg", "RF/EggWorld/AskPlace" },
+    HatchRemotes = { "RF/EggWorld/AskHatch", "RE/EggWorld/HatchEgg", "RF/Hatch/AskHatch" },
+}
+
+function PlaceHatch:TryEach(list, isInvoke)
+    for _, path in ipairs(list) do
+        local remote = getRemote(path)
+        if remote then
+            if isInvoke then
+                local ok = safeInvoke(remote)
+                if ok then
+                    return true
+                end
+            else
+                if safeFire(remote) then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+function PlaceHatch:PlaceOnce()
+    if self:TryEach(self.PlaceRemotes, true) then
+        return true
+    end
+    return self:TryEach(self.PlaceRemotes, false)
+end
+
+function PlaceHatch:HatchOnce()
+    if self:TryEach(self.HatchRemotes, true) then
+        return true
+    end
+    return self:TryEach(self.HatchRemotes, false)
+end
+
 -- 6. UI construction using the helpers -----------------------------
 
 local Window = createWindow()
@@ -3462,6 +3761,29 @@ end)
 createDropdown(StealTab, "Pickup Mode", { "Instant (Hold=0)", "Normal" }, "Instant (Hold=0)", function(v)
     InstantInteract:Toggle(v == "Instant (Hold=0)")
 end)
+createCheckbox(StealTab, "Secret First (any mode)", false, function(v)
+    AutoSteal.SecretFirst = v
+end)
+createButton(StealTab, "Steal Now (one grab)", function()
+    pcall(function()
+        if not AutoSteal.Enabled then
+            AutoSteal:Toggle(true)
+        else
+            task.spawn(function()
+                pcall(function()
+                    AutoSteal:StealOnce()
+                end)
+            end)
+        end
+    end)
+end)
+createButton(StealTab, "Stop Current Steal", function()
+    AutoSteal.Token = AutoSteal.Token + 1
+    AutoSteal:StopMovement()
+    if Notify then
+        Notify("Steal stopped")
+    end
+end)
 pcall(function()
     InstantInteract:Toggle(true)
 end)
@@ -3484,6 +3806,22 @@ createCheckbox(StealTab, "Return to Base", true, function(v)
 end)
 createCheckbox(StealTab, "Go Back Out", true, function(v)
     AutoSteal.GoBackOut = v
+end)
+createCheckbox(StealTab, "Auto Place (after base)", false, function(v)
+    AutoSteal.PlaceEnabled = v
+end)
+createCheckbox(StealTab, "Auto Hatch (when ready)", false, function(v)
+    AutoSteal.HatchEnabled = v
+end)
+createButton(StealTab, "Place Eggs Now", function()
+    pcall(function()
+        PlaceHatch:PlaceOnce()
+    end)
+end)
+createButton(StealTab, "Hatch Now", function()
+    pcall(function()
+        PlaceHatch:HatchOnce()
+    end)
 end)
 
 SectionLabel(StealTab, "Area (empty = all areas)")
@@ -3551,19 +3889,22 @@ local moveLayout = Instance.new("UIListLayout")
 moveLayout.Padding = UDim.new(0, 6)
 moveLayout.SortOrder = Enum.SortOrder.LayoutOrder
 moveLayout.Parent = moveBox
-local walkCtl, walkApply = createSlider(moveBox, "Walk Speed", 16, 5000, 500, function(v)
+local walkCtl, walkApply = createSlider(moveBox, "Walk Speed", 100, 1500, 500, function(v)
     AutoSteal.MoveSpeed = v
 end)
-local flyCtl, flyApply = createSlider(moveBox, "Fly Speed", 20, 5000, 800, function(v)
+local flyCtl, flyApply = createSlider(moveBox, "Fly Speed", 100, 1500, 800, function(v)
     Fly.Speed = v
     AutoSteal.MoveSpeed = v
 end)
-local blinkCtl, blinkApply = createSlider(moveBox, "Blink Distance", 5, 500, 100, function(v)
+local blinkCtl, blinkApply = createSlider(moveBox, "Blink Distance", 100, 1500, 100, function(v)
     AutoSteal.BlinkDistance = v
 end)
-local glideCtl, glideApply = createSlider(moveBox, "Glide Speed", 10, 5000, 800, function(v)
+local glideCtl, glideApply = createSlider(moveBox, "Glide Speed", 100, 1500, 800, function(v)
     Glide.Speed = v
     AutoSteal.MoveSpeed = v
+end)
+createSlider(moveBox, "Fly Hover Height", 0, 300, 12, function(v)
+    AutoSteal.HoverHeight = v
 end)
 UpdateMovementBox = function()
     local m = AutoSteal.MovementMethod or "Fly"
@@ -3578,7 +3919,7 @@ SectionLabel(StealTab, "Anti-Clamp (serves steal speed)")
 createToggle(StealTab, "Speed Bypass", false, function(v)
     SpeedBypass:Toggle(v)
 end)
-local bypassCtl, bypassApply = createSlider(StealTab, "Bypass Speed", 100, 10000, 2000, function(v)
+local bypassCtl, bypassApply = createSlider(StealTab, "Bypass Speed", 100, 1500, 1500, function(v)
     SpeedBypass.WalkSpeed = v
 end)
 createDropdown(StealTab, "Anti-Clamp", { "Off", "Capped 500", "Uncapped" }, "Uncapped", function(v)
@@ -3589,16 +3930,16 @@ createDropdown(StealTab, "Anti-Clamp", { "Off", "Capped 500", "Uncapped" }, "Unc
         SpeedBypass:Toggle(true)
     end
 end)
-createDropdown(StealTab, "Speed Preset", { "Legit 16-60", "Fast 500", "Blatant 1500", "Insane 5000" }, "Fast 500", function(v)
-    local walk, fly, glide, blink, bypass = 60, 50, 50, 20, 500
-    if v == "Legit 16-60" then
-        walk, fly, glide, blink, bypass = 60, 50, 50, 20, 500
+createDropdown(StealTab, "Speed Preset", { "Legit 100", "Fast 500", "Blatant 1000", "Insane 1500" }, "Fast 500", function(v)
+    local walk, fly, glide, blink, bypass = 100, 100, 100, 100, 500
+    if v == "Legit 100" then
+        walk, fly, glide, blink, bypass = 100, 100, 100, 100, 500
     elseif v == "Fast 500" then
-        walk, fly, glide, blink, bypass = 500, 500, 500, 60, 2000
-    elseif v == "Blatant 1500" then
-        walk, fly, glide, blink, bypass = 1500, 1500, 1500, 150, 5000
-    elseif v == "Insane 5000" then
-        walk, fly, glide, blink, bypass = 5000, 5000, 5000, 500, 10000
+        walk, fly, glide, blink, bypass = 500, 500, 500, 300, 1000
+    elseif v == "Blatant 1000" then
+        walk, fly, glide, blink, bypass = 1000, 1000, 1000, 800, 1500
+    elseif v == "Insane 1500" then
+        walk, fly, glide, blink, bypass = 1500, 1500, 1500, 1500, 1500
     end
     AutoSteal.MoveSpeed = walk
     Fly.Speed = fly
@@ -3883,8 +4224,11 @@ end)
 
 -- Tab 5: Misc
 SectionLabel(MiscTab, "Session")
-createDropdown(MiscTab, "Anti AFK", { "Off", "On" }, "Off", function(v)
+createDropdown(MiscTab, "Anti AFK", { "Off", "On" }, "On", function(v)
     AntiAFK:Toggle(v == "On")
+end)
+pcall(function()
+    AntiAFK:Toggle(true)
 end)
 SectionLabel(MiscTab, "Protection")
 createDropdown(MiscTab, "Anti-Trap", { "Off", "On" }, "Off", function(v)
