@@ -325,8 +325,13 @@ local function createWindow()
     -- window to fit instead of clipping off-screen.
     local uiScale = Instance.new("UIScale")
     uiScale.Parent = main
+    local scaleOverride = nil -- nil = auto-fit small viewports
     local function fitScale()
         pcall(function()
+            if scaleOverride then
+                uiScale.Scale = scaleOverride
+                return
+            end
             local cam = Workspace.CurrentCamera
             if not cam then
                 return
@@ -448,6 +453,18 @@ local function createWindow()
         Main = main,
         Sidebar = sidebar,
         Content = content,
+        SetScaleMode = function(mode)
+            if mode == "Small" then
+                scaleOverride = 0.55
+            elseif mode == "Medium" then
+                scaleOverride = 0.75
+            elseif mode == "Large" then
+                scaleOverride = 1
+            else
+                scaleOverride = nil
+            end
+            fitScale()
+        end,
     }
 end
 
@@ -1232,6 +1249,7 @@ local AutoBuy = {
     BuyBases = true,
     BuyTrails = true,
     MaxSpend = 1000000,
+    BuyInterval = 0.5,
     Treadmills = nil,
     Trails = nil,
     Bases = nil,
@@ -1421,7 +1439,7 @@ local AutoSell = {
         Rare = true,
         Epic = true,
         Legendary = true,
-        Mythic = true,
+        Mythic = false, -- safer default: never auto-sell Mythic unless chosen
     },
     Save = nil,
     Assets = nil,
@@ -1510,7 +1528,8 @@ local AutoFarm = {
     Enabled = false,
     MinArea = 9,
     ReturnToBase = true,
-    CycleDelay = 5,
+    CycleDelay = 1.5,
+    GoSpeed = 1500, -- un-hardcoded farm travel speed (was fixed 430)
     Areas = {
         "Forest",
         "Lake",
@@ -1617,7 +1636,8 @@ function AutoFarm:GoTo(cframePos)
             end
             local dir = (target.Position - start)
             if dir.Magnitude > 0 then
-                local step = start + dir.Unit * dt * 430
+                local spd = tonumber(self.GoSpeed) or 430
+                local step = start + dir.Unit * dt * spd
                 pcall(function()
                     char:MoveTo(step)
                 end)
@@ -1803,15 +1823,15 @@ local Glide, Blink, Fly, AutoTreadmill
 -- egg record schema (AreaId/BoundsCFrame verified from EggState).
 local AutoSteal = {
     Enabled = false,
-    ScanRadius = 300,
+    ScanRadius = 1500,
     MovementMethod = "Fly", -- Walk / Glide / Blink / Fly
     FilterMode = "Rarity", -- Rarity / Best Value / Weight-Size
     AreaAllow = {}, -- empty = all areas; keys are AreaId strings
     ReturnToBase = true,
     GoBackOut = true,
-    MoveSpeed = 60,
-    BlinkDistance = 20,
-    CycleDelay = 5,
+    MoveSpeed = 500,
+    BlinkDistance = 100,
+    CycleDelay = 1.5,
     MinValue = 0,
     MaxValue = 1000000000,
     BestValueOnly = false,
@@ -2260,7 +2280,7 @@ end
 -- TODO: adjust Walk steering if this game server-clamps WalkSpeed.
 function AutoSteal:TravelTo(pos, token)
     local method = self.MovementMethod or "Walk"
-    local speed = math.clamp(tonumber(self.MoveSpeed) or 60, 16, 500)
+    local speed = math.clamp(tonumber(self.MoveSpeed) or 500, 16, 5000)
     self.StealDriving = true
     if method == "Blink" then
         pcall(function()
@@ -2518,8 +2538,8 @@ end
 -- SpeedBypass -----------------------------------------------------
 local SpeedBypass = {
     Enabled = false,
-    WalkSpeed = 500,
-    SafeMode = true,
+    WalkSpeed = 2000,
+    SafeMode = false,
     Hooked = false,
     SpeedConn = nil,
 }
@@ -3011,6 +3031,65 @@ function AutoTreadmill:Toggle(state)
     end
 end
 
+-- AntiTrap ----------------------------------------------------------
+-- Neuters trap touch-interest: traps are BaseParts named Hitbox under
+-- workspace.__DEBRIS. Suppress CanTouch/CanQuery (never destroy), restore
+-- on disable. Ported from friend reference (no executor functions needed).
+local AntiTrap = {
+    Enabled = false,
+    Conn = nil,
+}
+
+local function AntiTrapSweep(state)
+    pcall(function()
+        local debris = Workspace:FindFirstChild("__DEBRIS")
+        if not debris then
+            return
+        end
+        for _, v in ipairs(debris:GetDescendants()) do
+            if v:IsA("BasePart") and v.Name == "Hitbox" then
+                v.CanTouch = state
+                v.CanQuery = state
+            end
+        end
+    end)
+end
+
+function AntiTrap:Toggle(state)
+    self.Enabled = state and true or false
+    if self.Conn then
+        pcall(function()
+            self.Conn:Disconnect()
+        end)
+        self.Conn = nil
+    end
+    if self.Enabled then
+        AntiTrapSweep(false)
+        local ok, conn = pcall(function()
+            local debris = Workspace:WaitForChild("__DEBRIS", 10)
+            return debris.DescendantAdded:Connect(function(v)
+                task.wait(0.1)
+                pcall(function()
+                    if v and v.Parent and v:IsA("BasePart") and v.Name == "Hitbox" then
+                        v.CanTouch = false
+                        v.CanQuery = false
+                    end
+                end)
+            end)
+        end)
+        if ok and conn then
+            self.Conn = TrackConnection(conn)
+            if Notify then
+                Notify("Anti-Trap enabled")
+            end
+        else
+            warn("[Quantum Hub] AntiTrap: no __DEBRIS (" .. tostring(conn) .. ")")
+        end
+    else
+        AntiTrapSweep(true)
+    end
+end
+
 -- AntiAFK -----------------------------------------------------------
 local AntiAFK = {
     Enabled = false,
@@ -3132,6 +3211,39 @@ function GraphicsOpt:Toggle(state)
     end
 end
 
+-- Named levels for the Graphics dropdown. Normal restores everything.
+function GraphicsOpt:SetLevel(level)
+    if level == "Ultra Low" then
+        self:ApplyLow()
+        pcall(function()
+            -- TODO: adjust if this client streams assets differently.
+            for _, v in ipairs(Workspace:GetDescendants()) do
+                if v:IsA("BasePart") then
+                    pcall(function()
+                        v.Material = Enum.Material.SmoothPlastic
+                    end)
+                elseif v:IsA("Decal") or v:IsA("Texture") then
+                    pcall(function()
+                        v.Transparency = 1
+                    end)
+                elseif v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") then
+                    pcall(function()
+                        v.Enabled = false
+                    end)
+                end
+            end
+        end)
+        self.Low = true
+        if Notify then
+            Notify("Ultra Low graphics ON")
+        end
+    elseif level == "Low" then
+        self:Toggle(true)
+    else
+        self:Toggle(false)
+    end
+end
+
 -- 6. UI construction using the helpers -----------------------------
 
 local Window = createWindow()
@@ -3199,8 +3311,8 @@ end
 
 -- Tab 1: Main (Combat)
 SectionLabel(MainTab, "Combat")
-createToggle(MainTab, "Kill Aura", false, function(v)
-    KillAura:Toggle(v)
+createDropdown(MainTab, "Kill Aura Mode", { "Off", "On" }, "Off", function(v)
+    KillAura:Toggle(v == "On")
 end)
 createSlider(MainTab, "Range", 5, 30, 16.5, function(v)
     KillAura.Range = v
@@ -3211,71 +3323,147 @@ end)
 createSlider(MainTab, "Attack Delay", 0.05, 0.5, 0.1, function(v)
     KillAura.AttackDelay = v
 end)
-createToggle(MainTab, "No Knockback", false, function(v)
-    NoKnockback:Toggle(v)
+createDropdown(MainTab, "Knockback Protection", { "Off", "On" }, "Off", function(v)
+    NoKnockback:Toggle(v == "On")
 end)
-createToggle(MainTab, "Instant Interact", false, function(v)
+createToggle(MainTab, "Instant Interact", true, function(v)
     InstantInteract:Toggle(v)
 end)
 
 -- Tab 2: Automation
 SectionLabel(AutomationTab, "Auto Buy")
-createToggle(AutomationTab, "Auto Buy", false, function(v)
-    AutoBuy:Toggle(v)
+createDropdown(AutomationTab, "Auto Buy", { "Off", "On" }, "Off", function(v)
+    AutoBuy:Toggle(v == "On")
 end)
-createCheckbox(AutomationTab, "Treadmills", true, function(v)
-    AutoBuy.BuyTreadmills = v
+local buySetters = {}
+createDropdown(AutomationTab, "Buy Set", { "All", "Treadmills Only", "Bases Only", "Trails Only", "Treadmills+Bases", "Treadmills+Trails", "Bases+Trails" }, "All", function(v)
+    local t, b, tr = true, true, true
+    if v == "Treadmills Only" then
+        b, tr = false, false
+    elseif v == "Bases Only" then
+        t, tr = false, false
+    elseif v == "Trails Only" then
+        t, b = false, false
+    elseif v == "Treadmills+Bases" then
+        tr = false
+    elseif v == "Treadmills+Trails" then
+        b = false
+    elseif v == "Bases+Trails" then
+        t = false
+    end
+    AutoBuy.BuyTreadmills, AutoBuy.BuyBases, AutoBuy.BuyTrails = t, b, tr
+    if buySetters.Treadmills then
+        pcall(buySetters.Treadmills, t)
+    end
+    if buySetters.Bases then
+        pcall(buySetters.Bases, b)
+    end
+    if buySetters.Trails then
+        pcall(buySetters.Trails, tr)
+    end
 end)
-createCheckbox(AutomationTab, "Bases", true, function(v)
-    AutoBuy.BuyBases = v
-end)
-createCheckbox(AutomationTab, "Trails", true, function(v)
-    AutoBuy.BuyTrails = v
-end)
+do
+    local _, s1 = createCheckbox(AutomationTab, "Treadmills", true, function(v)
+        AutoBuy.BuyTreadmills = v
+    end)
+    buySetters.Treadmills = s1
+    local _, s2 = createCheckbox(AutomationTab, "Bases", true, function(v)
+        AutoBuy.BuyBases = v
+    end)
+    buySetters.Bases = s2
+    local _, s3 = createCheckbox(AutomationTab, "Trails", true, function(v)
+        AutoBuy.BuyTrails = v
+    end)
+    buySetters.Trails = s3
+end
 createSlider(AutomationTab, "Max Spend per Cycle", 0, 1000000000, 1000000, function(v)
     AutoBuy.MaxSpend = v
 end)
+createSlider(AutomationTab, "Buy Interval", 0.1, 2, 0.5, function(v)
+    AutoBuy.BuyInterval = v
+end)
 
 SectionLabel(AutomationTab, "Auto Sell")
-createToggle(AutomationTab, "Auto Sell", false, function(v)
-    AutoSell:Toggle(v)
+createDropdown(AutomationTab, "Auto Sell", { "Off", "On" }, "Off", function(v)
+    AutoSell:Toggle(v == "On")
+end)
+local sellSetters = {}
+local function ApplySellSet(set)
+    for r, want in pairs(set) do
+        AutoSell.Rarities[r] = want
+        if sellSetters[r] then
+            pcall(sellSetters[r], want)
+        end
+    end
+end
+createDropdown(AutomationTab, "Sell Preset", { "Junk Only (no Mythic)", "Standard (no Mythic)", "All incl Mythic", "Sell Nothing" }, "Junk Only (no Mythic)", function(v)
+    if v == "Standard (no Mythic)" then
+        ApplySellSet({ Common = true, Uncommon = true, Rare = true, Epic = true, Legendary = true, Mythic = false })
+    elseif v == "All incl Mythic" then
+        ApplySellSet({ Common = true, Uncommon = true, Rare = true, Epic = true, Legendary = true, Mythic = true })
+    elseif v == "Sell Nothing" then
+        ApplySellSet({ Common = false, Uncommon = false, Rare = false, Epic = false, Legendary = false, Mythic = false })
+    else
+        ApplySellSet({ Common = true, Uncommon = true, Rare = true, Epic = false, Legendary = false, Mythic = false })
+    end
 end)
 for _, rarity in ipairs({ "Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic" }) do
     local r = rarity
-    createCheckbox(AutomationTab, r, true, function(v)
+    local def = (r ~= "Epic" and r ~= "Legendary" and r ~= "Mythic")
+    AutoSell.Rarities[r] = def
+    local _, setFn = createCheckbox(AutomationTab, r, def, function(v)
         AutoSell.Rarities[r] = v
     end)
+    sellSetters[r] = setFn
 end
 
 SectionLabel(AutomationTab, "Auto Farm")
-createToggle(AutomationTab, "Auto Farm", false, function(v)
-    AutoFarm:Toggle(v)
+createDropdown(AutomationTab, "Auto Farm", { "Off", "On" }, "Off", function(v)
+    AutoFarm:Toggle(v == "On")
 end)
-createSlider(AutomationTab, "Minimum Area", 1, 12, 9, function(v)
-    AutoFarm.MinArea = math.floor(v + 0.5)
+createDropdown(AutomationTab, "Farm Area Floor", { "Forest", "Lake", "Desert", "Jungle", "Snow", "Volcano", "Abyss Ocean", "Prehistoric", "Cosmic", "Cherry Blossom", "Titan Temple", "Light Dark" }, "Cherry Blossom", function(v)
+    AutoFarm.MinArea = table.find(AutoFarm.Areas, v) or 1
 end)
-createCheckbox(AutomationTab, "Return to Base", true, function(v)
-    AutoFarm.ReturnToBase = v
+createDropdown(AutomationTab, "Farm Return", { "Return to Base", "Stay in Field" }, "Return to Base", function(v)
+    AutoFarm.ReturnToBase = (v == "Return to Base")
 end)
-createSlider(AutomationTab, "Cycle Delay", 1, 20, 5, function(v)
+createSlider(AutomationTab, "Farm Speed", 100, 5000, 1500, function(v)
+    AutoFarm.GoSpeed = v
+end)
+createSlider(AutomationTab, "Cycle Delay", 1, 20, 1.5, function(v)
     AutoFarm.CycleDelay = v
 end)
 
 SectionLabel(AutomationTab, "Auto Redeem Index")
-createToggle(AutomationTab, "Auto Redeem", false, function(v)
-    AutoRedeem:Toggle(v)
+createDropdown(AutomationTab, "Auto Redeem", { "Off", "On" }, "Off", function(v)
+    AutoRedeem:Toggle(v == "On")
 end)
-createSlider(AutomationTab, "Interval", 1, 10, 1, function(v)
-    AutoRedeem.Interval = v
+createDropdown(AutomationTab, "Redeem Interval", { "1s Turbo", "2s Safe", "5s Slow" }, "1s Turbo", function(v)
+    if v == "2s Safe" then
+        AutoRedeem.Interval = 2
+    elseif v == "5s Slow" then
+        AutoRedeem.Interval = 5
+    else
+        AutoRedeem.Interval = 1
+    end
 end)
 
 -- Tab 3: Steal (Auto Steal)
 SectionLabel(StealTab, "Auto Steal")
-createToggle(StealTab, "Auto Steal", false, function(v)
-    AutoSteal:Toggle(v)
+createDropdown(StealTab, "Auto Steal", { "Off", "Instant Return to Base", "Return + Re-engage", "Stay (no return)" }, "Off", function(v)
+    if v == "Off" then
+        AutoSteal:Toggle(false)
+    else
+        AutoSteal.ReturnToBase = (v ~= "Stay (no return)")
+        AutoSteal.GoBackOut = (v == "Return + Re-engage")
+        AutoSteal:Toggle(true)
+    end
 end)
-createCheckbox(StealTab, "Instant Steal (HoldDuration=0)", false, function(v)
-    InstantInteract:Toggle(v)
+createDropdown(StealTab, "Pickup Mode", { "Instant (Hold=0)", "Normal" }, "Instant (Hold=0)", function(v)
+    InstantInteract:Toggle(v == "Instant (Hold=0)")
+end)
+pcall(function()
+    InstantInteract:Toggle(true)
 end)
 -- Forward declarations: visibility updaters are defined after the panels.
 local UpdateStealVisibility, UpdateMovementBox
@@ -3285,10 +3473,10 @@ createDropdown(StealTab, "Steal On", { "Rarity", "Best Value", "Weight-Size" }, 
         UpdateStealVisibility()
     end
 end)
-createSlider(StealTab, "Scan Radius", 50, 2000, 300, function(v)
+createSlider(StealTab, "Scan Radius", 50, 10000, 1500, function(v)
     AutoSteal.ScanRadius = v
 end)
-createSlider(StealTab, "Cycle Delay", 1, 20, 5, function(v)
+createSlider(StealTab, "Cycle Delay", 0.5, 10, 1.5, function(v)
     AutoSteal.CycleDelay = v
 end)
 createCheckbox(StealTab, "Return to Base", true, function(v)
@@ -3323,6 +3511,28 @@ for _, aname in ipairs({ "Forest", "Lake", "Desert", "Jungle", "Snow", "Volcano"
     end)
     areaSetters[an] = setFn
 end
+createDropdown(StealTab, "Area Preset", { "All Areas", "High Tier Only (Cosmic+)", "Cherry+Titan+LightDark", "Custom" }, "All Areas", function(v)
+    if v == "Custom" then
+        return
+    end
+    local want = {}
+    if v == "All Areas" then
+        want = nil -- empty = allow all
+    elseif v == "High Tier Only (Cosmic+)" then
+        want = { Cosmic = true, ["Cherry Blossom"] = true, ["Titan Temple"] = true, ["Light Dark"] = true }
+    elseif v == "Cherry+Titan+LightDark" then
+        want = { ["Cherry Blossom"] = true, ["Titan Temple"] = true, ["Light Dark"] = true }
+    end
+    AutoSteal.AreaAllow = {}
+    for an, setFn in pairs(areaSetters) do
+        local on = (want == nil) or (want[an] == true)
+        if on then
+            AutoSteal.AreaAllow[an] = true
+        end
+        pcall(setFn, on)
+    end
+    AutoSteal:RefreshPreview()
+end)
 
 SectionLabel(StealTab, "Movement")
 createDropdown(StealTab, "Movement Method", { "Walk", "Glide", "Blink", "Fly" }, "Fly", function(v)
@@ -3341,17 +3551,17 @@ local moveLayout = Instance.new("UIListLayout")
 moveLayout.Padding = UDim.new(0, 6)
 moveLayout.SortOrder = Enum.SortOrder.LayoutOrder
 moveLayout.Parent = moveBox
-local walkCtl = createSlider(moveBox, "Walk Speed", 16, 500, 60, function(v)
+local walkCtl, walkApply = createSlider(moveBox, "Walk Speed", 16, 5000, 500, function(v)
     AutoSteal.MoveSpeed = v
 end)
-local flyCtl = createSlider(moveBox, "Fly Speed", 20, 200, 50, function(v)
+local flyCtl, flyApply = createSlider(moveBox, "Fly Speed", 20, 5000, 800, function(v)
     Fly.Speed = v
     AutoSteal.MoveSpeed = v
 end)
-local blinkCtl = createSlider(moveBox, "Blink Distance", 5, 100, 20, function(v)
+local blinkCtl, blinkApply = createSlider(moveBox, "Blink Distance", 5, 500, 100, function(v)
     AutoSteal.BlinkDistance = v
 end)
-local glideCtl = createSlider(moveBox, "Glide Speed", 10, 200, 50, function(v)
+local glideCtl, glideApply = createSlider(moveBox, "Glide Speed", 10, 5000, 800, function(v)
     Glide.Speed = v
     AutoSteal.MoveSpeed = v
 end)
@@ -3368,11 +3578,42 @@ SectionLabel(StealTab, "Anti-Clamp (serves steal speed)")
 createToggle(StealTab, "Speed Bypass", false, function(v)
     SpeedBypass:Toggle(v)
 end)
-createSlider(StealTab, "Bypass Speed", 100, 5000, 500, function(v)
+local bypassCtl, bypassApply = createSlider(StealTab, "Bypass Speed", 100, 10000, 2000, function(v)
     SpeedBypass.WalkSpeed = v
 end)
-createCheckbox(StealTab, "Safe Mode (cap 500)", true, function(v)
-    SpeedBypass.SafeMode = v
+createDropdown(StealTab, "Anti-Clamp", { "Off", "Capped 500", "Uncapped" }, "Uncapped", function(v)
+    if v == "Off" then
+        SpeedBypass:Toggle(false)
+    else
+        SpeedBypass.SafeMode = (v == "Capped 500")
+        SpeedBypass:Toggle(true)
+    end
+end)
+createDropdown(StealTab, "Speed Preset", { "Legit 16-60", "Fast 500", "Blatant 1500", "Insane 5000" }, "Fast 500", function(v)
+    local walk, fly, glide, blink, bypass = 60, 50, 50, 20, 500
+    if v == "Legit 16-60" then
+        walk, fly, glide, blink, bypass = 60, 50, 50, 20, 500
+    elseif v == "Fast 500" then
+        walk, fly, glide, blink, bypass = 500, 500, 500, 60, 2000
+    elseif v == "Blatant 1500" then
+        walk, fly, glide, blink, bypass = 1500, 1500, 1500, 150, 5000
+    elseif v == "Insane 5000" then
+        walk, fly, glide, blink, bypass = 5000, 5000, 5000, 500, 10000
+    end
+    AutoSteal.MoveSpeed = walk
+    Fly.Speed = fly
+    Glide.Speed = glide
+    AutoSteal.BlinkDistance = blink
+    Blink.Distance = blink
+    SpeedBypass.WalkSpeed = bypass
+    pcall(walkApply, walk)
+    pcall(flyApply, fly)
+    pcall(glideApply, glide)
+    pcall(blinkApply, blink)
+    pcall(bypassApply, bypass)
+    if Notify then
+        Notify("Speed preset: " .. tostring(v))
+    end
 end)
 
 SectionLabel(StealTab, "Travel (manual jumps)")
@@ -3513,6 +3754,32 @@ local function RebuildStealFilters()
     RebuildFilterBox(mutationBox, AutoSteal.DiscoveredMutations, AutoSteal.MutationAllow, {})
 end
 
+createDropdown(StealTab, "Filter Preset", { "All", "Secrets Only", "Secret+Eternal+Divine", "Mythic+", "Custom" }, "All", function(v)
+    if v == "Custom" then
+        return
+    end
+    local want = {}
+    if v == "Secrets Only" then
+        want = { Secret = true }
+    elseif v == "Secret+Eternal+Divine" then
+        want = { Secret = true, Eternal = true, Divine = true }
+    elseif v == "Mythic+" then
+        want = { Mythic = true, Divine = true, Eternal = true, Secret = true, Cosmic = true }
+    end
+    AutoSteal.RarityAllow = {}
+    for _, en in ipairs(AutoSteal.PinRarities) do
+        local on = (want[en] == true)
+        AutoSteal.RarityAllow[en] = on and true or nil
+        if eggTypeSetters[en] then
+            pcall(eggTypeSetters[en], on)
+        end
+    end
+    RebuildStealFilters()
+    AutoSteal:RefreshPreview()
+end)
+createDropdown(StealTab, "Value Strategy", { "All Values", "Best Value Only" }, "All Values", function(v)
+    AutoSteal.BestValueOnly = (v == "Best Value Only")
+end)
 createButton(rarityPanel, "Refresh Filters", function()
     AutoSteal:DiscoverFilters()
     RebuildStealFilters()
@@ -3596,8 +3863,8 @@ end)
 
 -- Tab 4: Treadmill (Auto Treadmill)
 SectionLabel(TreadmillTab, "Auto Treadmill")
-createToggle(TreadmillTab, "Auto Treadmill", false, function(v)
-    AutoTreadmill:Toggle(v)
+createDropdown(TreadmillTab, "Auto Treadmill", { "Off", "On" }, "Off", function(v)
+    AutoTreadmill:Toggle(v == "On")
 end)
 createButton(TreadmillTab, "Find Treadmill Pad", function()
     local cf = AutoTreadmill:FindTreadmill()
@@ -3616,16 +3883,23 @@ end)
 
 -- Tab 5: Misc
 SectionLabel(MiscTab, "Session")
-createToggle(MiscTab, "Anti AFK", false, function(v)
-    AntiAFK:Toggle(v)
+createDropdown(MiscTab, "Anti AFK", { "Off", "On" }, "Off", function(v)
+    AntiAFK:Toggle(v == "On")
+end)
+SectionLabel(MiscTab, "Protection")
+createDropdown(MiscTab, "Anti-Trap", { "Off", "On" }, "Off", function(v)
+    AntiTrap:Toggle(v == "On")
 end)
 SectionLabel(MiscTab, "Client Graphics (reversible)")
-createToggle(MiscTab, "Low Graphics", false, function(v)
-    GraphicsOpt:Toggle(v)
+createDropdown(MiscTab, "Graphics", { "Normal", "Low", "Ultra Low" }, "Normal", function(v)
+    GraphicsOpt:SetLevel(v)
 end)
 
 -- Tab 6: Settings
 SectionLabel(SettingsTab, "Settings")
+createDropdown(SettingsTab, "UI Scale", { "Auto", "Small", "Medium", "Large" }, "Auto", function(v)
+    Window.SetScaleMode(v)
+end)
 createButton(SettingsTab, "Unload Quantum Hub", function()
     pcall(function()
         DisconnectAll()
@@ -3678,6 +3952,7 @@ createButton(SettingsTab, "Unload Quantum Hub", function()
         AutoTreadmill.Enabled = false
         AutoTreadmill.Token = AutoTreadmill.Token + 1
         AntiAFK:Toggle(false)
+        AntiTrap:Toggle(false)
         GraphicsOpt:Restore()
     end)
     pcall(function()
@@ -3697,10 +3972,10 @@ TrackConnection(RunService.Heartbeat:Connect(function()
     end)
 end))
 
--- AutoBuy loop every 2s
+-- AutoBuy loop (interval configurable)
 task.spawn(function()
     while true do
-        task.wait(2)
+        task.wait(tonumber(AutoBuy.BuyInterval) or 0.5)
         pcall(function()
             if AutoBuy.Enabled then
                 AutoBuy:Run()
