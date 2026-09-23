@@ -1,4 +1,4 @@
-﻿local e=game:GetService( "Players" )
+local e=game:GetService( "Players" )
 local r=game:GetService( "Workspace" )
 local y=game:GetService( "RunService" )
 local u=game:GetService( "TweenService" )
@@ -286,7 +286,9 @@ local W=T()h={[ "godmode" ]= false ,[ "autoGlide" ]= false ,[ "autoHatch" ]= fal
 [ "gui" ]=nil;
 [ "alive" ]= true ,[ "plot" ]=nil;
 [ "pen" ]=nil,[ "origin" ]=nil;
-[ "tread" ]=nil} _G.CNMJStream=_G.CNMJStream or 0 RS=function(v,...) if os.clock()-_G.CNMJStream>3 then _G.CNMJStream=os.clock() pcall(function(...) o:RequestStreamAroundAsync(v) end) end end
+[ "tread" ]=nil}
+_G.CNMJStream=_G.CNMJStream or 0
+local RS=function(v,...) if os.clock()-_G.CNMJStream>3 then _G.CNMJStream=os.clock() pcall(function(...) o:RequestStreamAroundAsync(v) end) end end
 local m
 local e4
 local r4
