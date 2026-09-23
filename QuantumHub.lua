@@ -1774,7 +1774,7 @@ end
 
 -- Forward declarations: AutoSteal travel reuses these movement modules,
 -- which are defined below. (Luau locals must be declared before use.)
-local Glide, Blink, Fly
+local Glide, Blink, Fly, AutoTreadmill
 
 -- AutoSteal -------------------------------------------------------
 -- TODO: adjust the candidate field names below to this game's exact
@@ -1782,7 +1782,9 @@ local Glide, Blink, Fly
 local AutoSteal = {
     Enabled = false,
     ScanRadius = 300,
-    MovementMethod = "Walk", -- Walk / Glide / Blink / Fly
+    MovementMethod = "Fly", -- Walk / Glide / Blink / Fly
+    FilterMode = "Rarity", -- Rarity / Best Value / Weight-Size
+    AreaAllow = {}, -- empty = all areas; keys are AreaId strings
     ReturnToBase = true,
     GoBackOut = true,
     MoveSpeed = 60,
@@ -1795,6 +1797,9 @@ local AutoSteal = {
     MaxWeight = 1000000,
     RarityAllow = {}, -- empty = allow all; TODO: adjust names via DiscoverFilters
     MutationAllow = {}, -- empty = allow all; TODO: adjust names via DiscoverFilters
+    -- Pinned rarity display order (real names still come from DiscoverFilters).
+    -- TODO: adjust pin list if this game adds/removes rarities.
+    PinRarities = { "Secret", "Eternal", "Divine", "Cosmic", "Mythic", "Legendary", "Rare", "Uncommon", "Common" },
     DiscoveredRarities = {},
     DiscoveredMutations = {},
     EggState = nil,
@@ -1875,7 +1880,20 @@ function AutoSteal:DiscoverFilters()
             end
         end
         table.sort(rar)
-        self.DiscoveredRarities = rar
+        local ordered = {}
+        local seen = {}
+        for _, pname in ipairs(self.PinRarities) do
+            if table.find(rar, pname) then
+                table.insert(ordered, pname)
+                seen[pname] = true
+            end
+        end
+        for _, rname in ipairs(rar) do
+            if not seen[rname] then
+                table.insert(ordered, rname)
+            end
+        end
+        self.DiscoveredRarities = ordered
     end)
     pcall(function()
         local muts = {}
@@ -2029,8 +2047,9 @@ end
 
 function AutoSteal:PassesFilters(egg)
     local ok, res = pcall(function()
+        local mode = self.FilterMode or "Rarity"
         local rarity = self:ResolveRarity(egg)
-        if next(self.RarityAllow) ~= nil then
+        if mode == "Rarity" and next(self.RarityAllow) ~= nil then
             -- Unresolvable rarity passes so schema drift can't hide everything.
             -- TODO: adjust to reject here if strict filtering is wanted.
             if rarity ~= nil and self.RarityAllow[rarity] ~= true then
@@ -2044,13 +2063,13 @@ function AutoSteal:PassesFilters(egg)
             end
         end
         local w = self:ResolveWeight(egg)
-        if w ~= nil then
+        if w ~= nil and mode == "Weight-Size" then
             if w < (self.MinWeight or 0) or w > (self.MaxWeight or math.huge) then
                 return false
             end
         end
         local v = self:ResolveValue(egg) or 0
-        if v < (self.MinValue or 0) or v > (self.MaxValue or math.huge) then
+        if mode == "Best Value" and (v < (self.MinValue or 0) or v > (self.MaxValue or math.huge)) then
             return false
         end
         return true
@@ -2082,7 +2101,13 @@ function AutoSteal:GetMatches()
             local pos = self:GetEggPos(egg)
             if pos then
                 local dist = (pos - origin).Magnitude
-                if dist <= (self.ScanRadius or 300) and self:PassesFilters(egg) then
+                local areaOk = true
+                pcall(function()
+                    if next(self.AreaAllow) ~= nil and typeof(egg) == "table" and egg.AreaId ~= nil then
+                        areaOk = self.AreaAllow[tostring(egg.AreaId)] == true
+                    end
+                end)
+                if areaOk and dist <= (self.ScanRadius or 300) and self:PassesFilters(egg) then
                     local area = "?"
                     pcall(function()
                         if typeof(egg) == "table" and egg.AreaId ~= nil then
@@ -2358,6 +2383,9 @@ function AutoSteal:Toggle(state)
             end
         end
         self:DiscoverFilters()
+        pcall(function()
+            AutoTreadmill:Pause()
+        end)
         self.Token = self.Token + 1
         local myToken = self.Token
         if Notify then
@@ -2382,6 +2410,9 @@ function AutoSteal:Toggle(state)
     else
         self.Token = self.Token + 1
         self:StopMovement()
+        pcall(function()
+            AutoTreadmill:Resume()
+        end)
     end
 end
 
@@ -2781,6 +2812,219 @@ function Teleport:TeleportNow()
     end)
 end
 
+-- AutoTreadmill -----------------------------------------------------
+-- Stand-on-treadmill loop. Teleports once onto the treadmill pad and lets
+-- the game magnet you on (no walk loop). AutoSteal pauses this while
+-- stealing and resumes it afterwards.
+-- TODO: adjust treadmill pad name matching if this game names it differently.
+-- (assigned, not re-declared: forward-declared above for AutoSteal)
+AutoTreadmill = {
+    Enabled = false,
+    Token = 0,
+    TreadmillCF = nil,
+    WasEnabled = false,
+    PausedBySteal = false,
+}
+
+function AutoTreadmill:FindTreadmill()
+    local ok, res = pcall(function()
+        for _, v in ipairs(Workspace:GetDescendants()) do
+            if v:IsA("BasePart") then
+                local n = string.lower(v.Name)
+                if string.find(n, "treadmill", 1, true) then
+                    return v.CFrame + Vector3.new(0, 3, 0)
+                end
+            end
+        end
+        return nil
+    end)
+    if ok then
+        return res
+    end
+    return nil
+end
+
+function AutoTreadmill:Pause()
+    if self.Enabled then
+        self.WasEnabled = true
+        self.PausedBySteal = true
+        self.Enabled = false
+        self.Token = self.Token + 1
+        warn("[Quantum Hub] AutoTreadmill paused (steal running)")
+    end
+end
+
+function AutoTreadmill:Resume()
+    if self.PausedBySteal then
+        self.PausedBySteal = false
+        if self.WasEnabled then
+            self.WasEnabled = false
+            self:Toggle(true)
+        end
+    end
+end
+
+function AutoTreadmill:Toggle(state)
+    self.Enabled = state and true or false
+    if self.Enabled then
+        self.WasEnabled = false
+        self.PausedBySteal = false
+        local cf = self:FindTreadmill()
+        if cf then
+            self.TreadmillCF = cf
+        end
+        if not self.TreadmillCF then
+            warn("[Quantum Hub] AutoTreadmill: pad not found")
+            if Notify then
+                Notify("Treadmill: pad not found")
+            end
+            self.Enabled = false
+            return
+        end
+        self.Token = self.Token + 1
+        local myToken = self.Token
+        if Notify then
+            Notify("AutoTreadmill enabled")
+        end
+        task.spawn(function()
+            while self.Enabled and myToken == self.Token do
+                pcall(function()
+                    local hrp = GetHRP()
+                    if hrp and self.TreadmillCF then
+                        if (self.TreadmillCF.Position - hrp.Position).Magnitude > 8 then
+                            hrp.CFrame = self.TreadmillCF
+                        end
+                    end
+                end)
+                task.wait(1)
+            end
+        end)
+    else
+        self.Token = self.Token + 1
+    end
+end
+
+-- AntiAFK -----------------------------------------------------------
+local AntiAFK = {
+    Enabled = false,
+    Conn = nil,
+}
+
+function AntiAFK:Toggle(state)
+    self.Enabled = state and true or false
+    if self.Conn then
+        pcall(function()
+            self.Conn:Disconnect()
+        end)
+        self.Conn = nil
+    end
+    if self.Enabled then
+        local ok, conn = pcall(function()
+            local vu = game:GetService("VirtualUser")
+            return LocalPlayer.Idled:Connect(function()
+                pcall(function()
+                    vu:CaptureController()
+                    vu:ClickButton2(Vector2.new())
+                end)
+            end)
+        end)
+        if ok and conn then
+            self.Conn = TrackConnection(conn)
+            if Notify then
+                Notify("Anti AFK enabled")
+            end
+        else
+            warn("[Quantum Hub] AntiAFK failed: " .. tostring(conn))
+            self.Enabled = false
+        end
+    end
+end
+
+-- GraphicsOpt -------------------------------------------------------
+-- Reversible client-side low-graphics toggle (save on enable, restore
+-- on disable, everything pcall-wrapped).
+local GraphicsOpt = {
+    Low = false,
+    Saved = {},
+}
+
+function GraphicsOpt:ApplyLow()
+    pcall(function()
+        local L = game:GetService("Lighting")
+        self.Saved.GlobalShadows = L.GlobalShadows
+        self.Saved.Technology = L.Technology
+        self.Saved.Brightness = L.Brightness
+        L.GlobalShadows = false
+        pcall(function()
+            L.Technology = Enum.Technology.Compatibility
+        end)
+        L.Brightness = 1
+        for _, v in ipairs(L:GetChildren()) do
+            if v:IsA("BloomEffect") or v:IsA("BlurEffect") or v:IsA("SunRaysEffect") or v:IsA("DepthOfFieldEffect") or v:IsA("ColorCorrectionEffect") then
+                self.Saved[v] = v.Enabled
+                v.Enabled = false
+            end
+        end
+    end)
+    pcall(function()
+        self.Saved.Streaming = Workspace.StreamingEnabled
+        Workspace.StreamingEnabled = true
+    end)
+    pcall(function()
+        -- TODO: adjust if this client exposes a different quality API.
+        local q = settings():GetService("RenderSettings")
+        self.Saved.Quality = q.QualityLevel
+        q.QualityLevel = Enum.QualityLevel.Level01
+    end)
+end
+
+function GraphicsOpt:Restore()
+    pcall(function()
+        local L = game:GetService("Lighting")
+        if self.Saved.GlobalShadows ~= nil then
+            L.GlobalShadows = self.Saved.GlobalShadows
+        end
+        if self.Saved.Technology ~= nil then
+            L.Technology = self.Saved.Technology
+        end
+        if self.Saved.Brightness ~= nil then
+            L.Brightness = self.Saved.Brightness
+        end
+        for obj, was in pairs(self.Saved) do
+            if typeof(obj) == "Instance" and obj.Parent then
+                obj.Enabled = was
+            end
+        end
+    end)
+    pcall(function()
+        if self.Saved.Streaming ~= nil then
+            Workspace.StreamingEnabled = self.Saved.Streaming
+        end
+    end)
+    pcall(function()
+        local q = settings():GetService("RenderSettings")
+        if self.Saved.Quality ~= nil then
+            q.QualityLevel = self.Saved.Quality
+        end
+    end)
+    self.Saved = {}
+end
+
+function GraphicsOpt:Toggle(state)
+    self.Low = state and true or false
+    if self.Low then
+        self:ApplyLow()
+        if Notify then
+            Notify("Low graphics ON")
+        end
+    else
+        self:Restore()
+        if Notify then
+            Notify("Graphics restored")
+        end
+    end
+end
+
 -- 6. UI construction using the helpers -----------------------------
 
 local Window = createWindow()
@@ -2796,7 +3040,9 @@ local MainTab = createTab(Sidebar, Content, "Main", 1)
 local MovementTab = createTab(Sidebar, Content, "Movement", 2)
 local AutomationTab = createTab(Sidebar, Content, "Automation", 3)
 local StealTab = createTab(Sidebar, Content, "Steal", 4)
-local SettingsTab = createTab(Sidebar, Content, "Settings", 5)
+local TreadmillTab = createTab(Sidebar, Content, "Treadmill", 5)
+local MiscTab = createTab(Sidebar, Content, "Misc", 6)
+local SettingsTab = createTab(Sidebar, Content, "Settings", 7)
 
 -- Floating reopen button (mobile): tap toggles the window, drag moves it.
 local floatBtn = Instance.new("TextButton")
@@ -2973,11 +3219,22 @@ SectionLabel(StealTab, "Auto Steal")
 createToggle(StealTab, "Auto Steal", false, function(v)
     AutoSteal:Toggle(v)
 end)
+createCheckbox(StealTab, "Instant Steal (HoldDuration=0)", false, function(v)
+    InstantInteract:Toggle(v)
+end)
+-- Forward declarations: visibility updaters are defined after the panels.
+local UpdateStealVisibility, UpdateMovementBox
+createDropdown(StealTab, "Steal On", { "Rarity", "Best Value", "Weight-Size" }, "Rarity", function(v)
+    AutoSteal.FilterMode = v
+    if UpdateStealVisibility then
+        UpdateStealVisibility()
+    end
+end)
 createSlider(StealTab, "Scan Radius", 50, 2000, 300, function(v)
     AutoSteal.ScanRadius = v
 end)
-createDropdown(StealTab, "Movement Method", { "Walk", "Glide", "Blink", "Fly" }, "Walk", function(v)
-    AutoSteal.MovementMethod = v
+createSlider(StealTab, "Cycle Delay", 1, 20, 5, function(v)
+    AutoSteal.CycleDelay = v
 end)
 createCheckbox(StealTab, "Return to Base", true, function(v)
     AutoSteal.ReturnToBase = v
@@ -2985,36 +3242,126 @@ end)
 createCheckbox(StealTab, "Go Back Out", true, function(v)
     AutoSteal.GoBackOut = v
 end)
-createSlider(StealTab, "Move Speed", 16, 500, 60, function(v)
+
+SectionLabel(StealTab, "Area (empty = all areas)")
+-- TODO: adjust area list if this game adds/removes biomes.
+local areaBox = Instance.new("Frame")
+areaBox.Name = "AreaBox"
+areaBox.Size = UDim2.new(1, 0, 0, 0)
+areaBox.AutomaticSize = Enum.AutomaticSize.Y
+areaBox.BackgroundTransparency = 1
+areaBox.Parent = StealTab
+local areaLayout = Instance.new("UIListLayout")
+areaLayout.Padding = UDim.new(0, 4)
+areaLayout.SortOrder = Enum.SortOrder.LayoutOrder
+areaLayout.Parent = areaBox
+for _, aname in ipairs({ "Forest", "Lake", "Desert", "Jungle", "Snow", "Volcano", "Abyss Ocean", "Prehistoric", "Cosmic", "Cherry Blossom", "Titan Temple", "Light Dark" }) do
+    local an = aname
+    AutoSteal.AreaAllow[an] = true
+    createCheckbox(areaBox, an, true, function(v)
+        if v then
+            AutoSteal.AreaAllow[an] = true
+        else
+            AutoSteal.AreaAllow[an] = false
+        end
+    end)
+end
+
+SectionLabel(StealTab, "Movement")
+createDropdown(StealTab, "Movement Method", { "Walk", "Glide", "Blink", "Fly" }, "Fly", function(v)
+    AutoSteal.MovementMethod = v
+    if UpdateMovementBox then
+        UpdateMovementBox()
+    end
+end)
+local moveBox = Instance.new("Frame")
+moveBox.Name = "MoveBox"
+moveBox.Size = UDim2.new(1, 0, 0, 0)
+moveBox.AutomaticSize = Enum.AutomaticSize.Y
+moveBox.BackgroundTransparency = 1
+moveBox.Parent = StealTab
+local moveLayout = Instance.new("UIListLayout")
+moveLayout.Padding = UDim.new(0, 6)
+moveLayout.SortOrder = Enum.SortOrder.LayoutOrder
+moveLayout.Parent = moveBox
+local walkCtl = createSlider(moveBox, "Walk Speed", 16, 500, 60, function(v)
     AutoSteal.MoveSpeed = v
 end)
-createSlider(StealTab, "Blink Distance", 5, 100, 20, function(v)
+local flyCtl = createSlider(moveBox, "Fly Speed", 20, 200, 50, function(v)
+    Fly.Speed = v
+    AutoSteal.MoveSpeed = v
+end)
+local blinkCtl = createSlider(moveBox, "Blink Distance", 5, 100, 20, function(v)
     AutoSteal.BlinkDistance = v
 end)
-createSlider(StealTab, "Cycle Delay", 1, 20, 5, function(v)
-    AutoSteal.CycleDelay = v
+local glideCtl = createSlider(moveBox, "Glide Speed", 10, 200, 50, function(v)
+    Glide.Speed = v
+    AutoSteal.MoveSpeed = v
 end)
+UpdateMovementBox = function()
+    local m = AutoSteal.MovementMethod or "Fly"
+    walkCtl.Visible = (m == "Walk")
+    flyCtl.Visible = (m == "Fly")
+    blinkCtl.Visible = (m == "Blink")
+    glideCtl.Visible = (m == "Glide")
+end
+UpdateMovementBox()
 
-SectionLabel(StealTab, "Filters (empty = allow all)")
-SectionLabel(StealTab, "Rarity")
+-- Filter context panels: only the active Steal On mode is visible.
+local rarityPanel = Instance.new("Frame")
+rarityPanel.Name = "RarityPanel"
+rarityPanel.Size = UDim2.new(1, 0, 0, 0)
+rarityPanel.AutomaticSize = Enum.AutomaticSize.Y
+rarityPanel.BackgroundTransparency = 1
+rarityPanel.Parent = StealTab
+local rarityPanelLayout = Instance.new("UIListLayout")
+rarityPanelLayout.Padding = UDim.new(0, 6)
+rarityPanelLayout.SortOrder = Enum.SortOrder.LayoutOrder
+rarityPanelLayout.Parent = rarityPanel
+
+local valuePanel = Instance.new("Frame")
+valuePanel.Name = "ValuePanel"
+valuePanel.Size = UDim2.new(1, 0, 0, 0)
+valuePanel.AutomaticSize = Enum.AutomaticSize.Y
+valuePanel.BackgroundTransparency = 1
+valuePanel.Visible = false
+valuePanel.Parent = StealTab
+local valuePanelLayout = Instance.new("UIListLayout")
+valuePanelLayout.Padding = UDim.new(0, 6)
+valuePanelLayout.SortOrder = Enum.SortOrder.LayoutOrder
+valuePanelLayout.Parent = valuePanel
+
+local weightPanel = Instance.new("Frame")
+weightPanel.Name = "WeightPanel"
+weightPanel.Size = UDim2.new(1, 0, 0, 0)
+weightPanel.AutomaticSize = Enum.AutomaticSize.Y
+weightPanel.BackgroundTransparency = 1
+weightPanel.Visible = false
+weightPanel.Parent = StealTab
+local weightPanelLayout = Instance.new("UIListLayout")
+weightPanelLayout.Padding = UDim.new(0, 6)
+weightPanelLayout.SortOrder = Enum.SortOrder.LayoutOrder
+weightPanelLayout.Parent = weightPanel
+
+SectionLabel(rarityPanel, "Rarity (empty = allow all)")
 local rarityBox = Instance.new("Frame")
 rarityBox.Name = "RarityBox"
 rarityBox.Size = UDim2.new(1, 0, 0, 0)
 rarityBox.AutomaticSize = Enum.AutomaticSize.Y
 rarityBox.BackgroundTransparency = 1
-rarityBox.Parent = StealTab
+rarityBox.Parent = rarityPanel
 local rarityLayout = Instance.new("UIListLayout")
 rarityLayout.Padding = UDim.new(0, 4)
 rarityLayout.SortOrder = Enum.SortOrder.LayoutOrder
 rarityLayout.Parent = rarityBox
 
-SectionLabel(StealTab, "Mutation")
+SectionLabel(rarityPanel, "Mutation")
 local mutationBox = Instance.new("Frame")
 mutationBox.Name = "MutationBox"
 mutationBox.Size = UDim2.new(1, 0, 0, 0)
 mutationBox.AutomaticSize = Enum.AutomaticSize.Y
 mutationBox.BackgroundTransparency = 1
-mutationBox.Parent = StealTab
+mutationBox.Parent = rarityPanel
 local mutationLayout = Instance.new("UIListLayout")
 mutationLayout.Padding = UDim.new(0, 4)
 mutationLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -3053,12 +3400,12 @@ local function RebuildStealFilters()
     RebuildFilterBox(mutationBox, AutoSteal.DiscoveredMutations, AutoSteal.MutationAllow)
 end
 
-createButton(StealTab, "Refresh Filters", function()
+createButton(rarityPanel, "Refresh Filters", function()
     AutoSteal:DiscoverFilters()
     RebuildStealFilters()
     AutoSteal:RefreshPreview()
 end)
-createButton(StealTab, "Reset Filters", function()
+createButton(rarityPanel, "Reset Filters", function()
     AutoSteal.RarityAllow = {}
     AutoSteal.MutationAllow = {}
     AutoSteal.MinValue = 0
@@ -3069,21 +3416,29 @@ createButton(StealTab, "Reset Filters", function()
     RebuildStealFilters()
     AutoSteal:RefreshPreview()
 end)
-createCheckbox(StealTab, "Best Value Only", false, function(v)
+createCheckbox(valuePanel, "Best Value Only", false, function(v)
     AutoSteal.BestValueOnly = v
 end)
-createSlider(StealTab, "Min Value", 0, 1000000000, 0, function(v)
+createSlider(valuePanel, "Min Value", 0, 1000000000, 0, function(v)
     AutoSteal.MinValue = v
 end)
-createSlider(StealTab, "Max Value", 0, 1000000000, 1000000000, function(v)
+createSlider(valuePanel, "Max Value", 0, 1000000000, 1000000000, function(v)
     AutoSteal.MaxValue = v
 end)
-createSlider(StealTab, "Min Weight", 0, 1000000, 0, function(v)
+createSlider(weightPanel, "Min Weight", 0, 1000000, 0, function(v)
     AutoSteal.MinWeight = v
 end)
-createSlider(StealTab, "Max Weight", 0, 1000000, 1000000, function(v)
+createSlider(weightPanel, "Max Weight", 0, 1000000, 1000000, function(v)
     AutoSteal.MaxWeight = v
 end)
+
+UpdateStealVisibility = function()
+    local mode = AutoSteal.FilterMode or "Rarity"
+    rarityPanel.Visible = (mode == "Rarity")
+    valuePanel.Visible = (mode == "Best Value")
+    weightPanel.Visible = (mode == "Weight-Size")
+end
+UpdateStealVisibility()
 
 SectionLabel(StealTab, "Preview (matching eggs)")
 local previewLabel = Instance.new("TextLabel")
@@ -3119,7 +3474,37 @@ pcall(function()
     AutoSteal:RefreshPreview()
 end)
 
--- Tab 5: Settings
+-- Tab 5: Treadmill (Auto Treadmill)
+SectionLabel(TreadmillTab, "Auto Treadmill")
+createToggle(TreadmillTab, "Auto Treadmill", false, function(v)
+    AutoTreadmill:Toggle(v)
+end)
+createButton(TreadmillTab, "Find Treadmill Pad", function()
+    local cf = AutoTreadmill:FindTreadmill()
+    if cf then
+        AutoTreadmill.TreadmillCF = cf
+        if Notify then
+            Notify("Treadmill pad locked")
+        end
+    else
+        warn("[Quantum Hub] Treadmill pad not found")
+        if Notify then
+            Notify("Treadmill pad not found")
+        end
+    end
+end)
+
+-- Tab 6: Misc
+SectionLabel(MiscTab, "Session")
+createToggle(MiscTab, "Anti AFK", false, function(v)
+    AntiAFK:Toggle(v)
+end)
+SectionLabel(MiscTab, "Client Graphics (reversible)")
+createToggle(MiscTab, "Low Graphics", false, function(v)
+    GraphicsOpt:Toggle(v)
+end)
+
+-- Tab 7: Settings
 SectionLabel(SettingsTab, "Settings")
 createButton(SettingsTab, "Unload Quantum Hub", function()
     pcall(function()
@@ -3166,6 +3551,10 @@ createButton(SettingsTab, "Unload Quantum Hub", function()
         AutoRedeem.Token = AutoRedeem.Token + 1
         AutoSteal.Token = AutoSteal.Token + 1
         AutoSteal:StopMovement()
+        AutoTreadmill.Enabled = false
+        AutoTreadmill.Token = AutoTreadmill.Token + 1
+        AntiAFK:Toggle(false)
+        GraphicsOpt:Restore()
     end)
     pcall(function()
         Window.Gui:Destroy()
@@ -3192,6 +3581,37 @@ task.spawn(function()
             if AutoBuy.Enabled then
                 AutoBuy:Run()
             end
+        end)
+    end
+end)
+
+-- Secret / Eternal / Divine field notifier every 1.5s (edge-triggered).
+task.spawn(function()
+    local lastCount = 0
+    while true do
+        task.wait(1.5)
+        pcall(function()
+            AutoSteal:EnsureData()
+            if not AutoSteal.EggState then
+                return
+            end
+            local ok, field = pcall(function()
+                return AutoSteal.EggState.ReadFieldEggs()
+            end)
+            if not ok or not field or not field.Records then
+                return
+            end
+            local n = 0
+            for _, egg in pairs(field.Records) do
+                local r = AutoSteal:ResolveRarity(egg)
+                if r == "Secret" or r == "Eternal" or r == "Divine" then
+                    n = n + 1
+                end
+            end
+            if n > 0 and n ~= lastCount and Notify then
+                Notify("Secret/Eternal/Divine in field: " .. tostring(n))
+            end
+            lastCount = n
         end)
     end
 end)
