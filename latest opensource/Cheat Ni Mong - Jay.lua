@@ -192,22 +192,20 @@ local function T(...)
         end
     end
     )
-    local r={[ "Light Dark" ]= false ,[ "Titan Temple" ]= false ,[ "Cherry Blossom" ]= false ;
+    local r={[ "Light Dark" ]= true ,[ "Titan Temple" ]= true ,[ "Cherry Blossom" ]= true ;
     [ "Cosmic" ]= false ;
     [ "Prehistoric" ]= false ,[ "Abyss Ocean" ]= false ;
     [ "Volcano" ]= false ,[ "Snow" ]= false ;
     [ "Jungle" ]= false ,[ "Desert" ]= false ;
     [ "Lake" ]= false ,[ "Forest" ]= false }
-    local y={[ "Divine" ]= false ,[ "Eternal" ]= false ,[ "Secret" ]= false ,[ "Cosmic" ]= false ,[ "Mythic" ]= false ;
+    local y={[ "Divine" ]= true ,[ "Eternal" ]= true ,[ "Secret" ]= true ,[ "Cosmic" ]= true ,[ "Mythic" ]= true ;
     [ "Legendary" ]= false ,[ "Epic" ]= false ,[ "Rare" ]= false ;
     [ "Uncommon" ]= false ;
     [ "Common" ]= false }
     if type(e)~= "table" then
         e={[ "selectedZones" ]=r;
-        [ "selectedRarities" ]=y,[ "alwaysCollectSecretPlus" ]= false ,[ "minRarityTier" ]= 2 ;
-        [ "autoTreadmill" ]= false ;
-        [ "autoUpgradeTreadmill" ]= false ,[ "autoBuyTrails" ]= false ;
-        [ "hideNotEnoughMoney" ]= false ;
+        [ "selectedRarities" ]=y,[ "alwaysCollectSecretPlus" ]= true ,[ "minRarityTier" ]= 2 ;
+        [ "autoTreadmill" ]= true ; [ "autoUpgradeTreadmill" ]= true ,[ "autoBuyTrails" ]= true ; [ "hideNotEnoughMoney" ]= true ;
         [ "performanceMode" ]= false ,[ "disable3D" ]= false ,[ "antiAFK" ]= true ,[ "returnHeight" ]= 70 ,[ "language" ]= "EN" }
     else
         if type(e.selectedZones )~= "table" then
@@ -223,22 +221,22 @@ local function T(...)
             end
         end
         if e.alwaysCollectSecretPlus ==nil then
-            e.alwaysCollectSecretPlus = false
+            e.alwaysCollectSecretPlus = true
         end
         if e.minRarityTier ==nil then
             e.minRarityTier = 2
         end
         if e.autoTreadmill ==nil then
-            e.autoTreadmill = false
+            e.autoTreadmill = true
         end
         if e.autoUpgradeTreadmill ==nil then
-            e.autoUpgradeTreadmill = false
+            e.autoUpgradeTreadmill = true
         end
         if e.autoBuyTrails ==nil then
-            e.autoBuyTrails = false
+            e.autoBuyTrails = true
         end
         if e.hideNotEnoughMoney ==nil then
-            e.hideNotEnoughMoney = false
+            e.hideNotEnoughMoney = true
         end
         if e.performanceMode ==nil then
             e.performanceMode = false
@@ -269,7 +267,7 @@ local function x(...) pcall(function(...)
     end
     )
 end
-local W=T()h={[ "godmode" ]= false ,[ "autoGlide" ]= false ,[ "autoHatch" ]= false ;
+local W=T()h={[ "godmode" ]= true ,[ "autoGlide" ]= true ,[ "autoHatch" ]= false ;
 [ "autoPlaceEvery5" ]= false ;
 [ "batchStealCount" ]= 0 ,[ "isBatchPlacing" ]= false ,[ "isHatching" ]= false ;
 [ "autoFarmLoop" ]= false ,[ "pureTweenFarm" ]= false ;
@@ -277,8 +275,8 @@ local W=T()h={[ "godmode" ]= false ,[ "autoGlide" ]= false ,[ "autoHatch" ]= fal
 [ "securingEgg" ]= false ,[ "glideSpeed" ]=O();
 [ "selectedZones" ]=W.selectedZones ;
 [ "selectedRarities" ]=W.selectedRarities ;
-[ "alwaysCollectSecretPlus" ]= false ,[ "minRarityTier" ]=W.minRarityTier ,[ "autoTreadmill" ]= false;
-[ "autoUpgradeTreadmill" ]= false,[ "autoBuyTrails" ]= false,[ "hideNotEnoughMoney" ]= false ;
+[ "alwaysCollectSecretPlus" ]=W.alwaysCollectSecretPlus ,[ "minRarityTier" ]=W.minRarityTier ,[ "autoTreadmill" ]=(W.autoTreadmill ~= false );
+[ "autoUpgradeTreadmill" ]=(W.autoUpgradeTreadmill ~= false ),[ "autoBuyTrails" ]=(W.autoBuyTrails ~= false ),[ "hideNotEnoughMoney" ]=(W.hideNotEnoughMoney ~= false );
 [ "performanceMode" ]=(W.performanceMode == true ),[ "disable3D" ]=(W.disable3D == true ),[ "antiAFK" ]= true,[ "returnHeight" ]=W.returnHeight or 70 ,[ "onTreadmill" ]= false ,[ "lastTreadmillMount" ]= 0 ,[ "laneZ" ]= -360 ,[ "swapped" ]= false ;
 [ "teleporting" ]= false ,[ "isReturning" ]= false ;
 [ "delivering" ]= false ,[ "holdingEggForGuard" ]= false ,[ "currentTargetModel" ]=nil,[ "targetPosition" ]=nil;
@@ -3467,7 +3465,7 @@ l4=function(e,u,...)
         return true
     end
 end
-h.decoyDone=false h.mainTargetCache=nil h.decoyFailCount=h.decoyFailCount or {} local function GetNearestEgg() local hr=o.Character and o.Character:FindFirstChild("HumanoidRootPart") if not hr then return nil end local best,bd=nil,1e9 local es=h4(false) if not es or #es==0 then es=h4(true) end if not es then return nil end for _,rec in ipairs(es) do local st=rec.State if st=="Slot" or st=="Dropped" or st==1 then if rec.BoundsCFrame then local pos=rec.BoundsCFrame.Position if pos.X>=530 and not string.find(tostring(rec.Uid),"FirstArea") then if not (X4[rec.Uid] and os.clock()<X4[rec.Uid]) then local d=(hr.Position-pos).Magnitude if d<bd then bd=d best={Uid=rec.Uid,CFrame=rec.BoundsCFrame,Position=pos,Distance=d,Model=rec.PhysicalModel} end end end end end end return best end local lastRagScan=0 local lastRagScanRes=false local function IsRagdolled() local ch=o.Character local hu=ch and ch:FindFirstChildOfClass("Humanoid") if not hu then return false end local st=nil pcall(function() st=hu:GetState() end) if st==Enum.HumanoidStateType.Ragdoll or st==Enum.HumanoidStateType.Physics or st==Enum.HumanoidStateType.FallingDown then return true end if hu.PlatformStand then return true end if ch and os.clock()-lastRagScan>0.5 then lastRagScan=os.clock() lastRagScanRes=false for _,d in ipairs(ch:GetDescendants()) do if d:IsA("BallSocketConstraint") or d:IsA("HingeConstraint") then lastRagScanRes=true break end end end if lastRagScanRes then return true end return false end local function WaitForRagdoll(tm,sid) local t0=os.clock() tm=tm or 10 while os.clock()-t0<tm and h.alive do if sid and O4~=sid then return false end if not h.pureTweenFarm and not h.autoFarmLoop then return false end if IsRagdolled() then return true end task.wait(0.15) end return false end local function DecoyMainTarget(mode) local sid=O4 local main=nil pcall(function() main=N4() end) if not main or not main.Uid then task.wait(0.25) return nil end local fails=(h.decoyFailCount and h.decoyFailCount[main.Uid]) or 0 if fails>=5 then h.decoyFailCount[main.Uid]=0 h.decoyDone=false h.mainTargetCache=nil end if h.decoyDone and h.mainTargetCache and h.mainTargetCache.Uid==main.Uid then return main end local decoy=nil pcall(function() decoy=GetNearestEgg() end) if not decoy or not decoy.Uid or decoy.Uid==main.Uid then h.decoyDone=true h.mainTargetCache=main return main end h.statusText=string.format("[Decoy] Grabbing nearest before main...") local ok=false if mode=="WARP" then local ch=o.Character local hr=ch and ch:FindFirstChild("HumanoidRootPart") if hr then pcall(function() RS(decoy.Position) end) V4(decoy.Position,8) pcall(function() ch:PivotTo(decoy.CFrame*CFrame.new(0,0.4,0)) end) local t1=os.clock()+2.5 while not w4(decoy.Uid) and os.clock()<t1 and h.alive do if sid and O4~=sid then break end pcall(function() d4(decoy.Model,decoy.Position) end) if i then pcall(function() if i:IsA("RemoteFunction") then i:InvokeServer({["Uid"]=decoy.Uid}) else i:FireServer({["Uid"]=decoy.Uid}) end end) end task.wait(0.2) end ok=w4(decoy.Uid) end else local rr=R4(decoy.CFrame*CFrame.new(0,0.4,0),h.glideSpeed,decoy.Uid,sid) if rr then local t1=os.clock()+2.5 while not w4(decoy.Uid) and os.clock()<t1 and h.alive do if sid and O4~=sid then break end pcall(function() d4(decoy.Model,decoy.Position) end) if i then pcall(function() if i:IsA("RemoteFunction") then i:InvokeServer({["Uid"]=decoy.Uid}) else i:FireServer({["Uid"]=decoy.Uid}) end end) end task.wait(0.2) end ok=w4(decoy.Uid) end end if not ok then X4[decoy.Uid]=os.clock()+2 return nil end h.statusText="[Decoy] Dropping decoy..." local t2=os.clock()+1.5 while w4(decoy.Uid) and os.clock()<t2 and h.alive do if sid and O4~=sid then return nil end pcall(u4) task.wait(0.12) end if not w4(decoy.Uid) then h.decoyDone=true h.mainTargetCache=main H("[Decoy] Dropped, switching to MAIN "..tostring(main.Uid)) return main end h.statusText="[Decoy] Drop failed, waiting ragdoll..." if WaitForRagdoll(10,sid) then pcall(u4) task.wait(0.15) pcall(u4) h.decoyDone=true h.mainTargetCache=main H("[Decoy] Ragdoll trigger, switching to MAIN "..tostring(main.Uid)) return main end X4[decoy.Uid]=os.clock()+2 return nil end T4=function(e,...)
+h.decoyDone=false h.mainTargetCache=nil h.decoyFailCount=h.decoyFailCount or {} local function GetNearestEgg() local hr=o.Character and o.Character:FindFirstChild("HumanoidRootPart") if not hr then return nil end local best,bd=nil,1e9 local es=h4(false) if not es or #es==0 then es=h4(true) end if not es then return nil end for _,rec in ipairs(es) do local st=rec.State if st=="Slot" or st=="Dropped" or st==1 then if rec.BoundsCFrame then local pos=rec.BoundsCFrame.Position if pos.X>=530 and not string.find(tostring(rec.Uid),"FirstArea") then if not (X4[rec.Uid] and os.clock()<X4[rec.Uid]) then local d=(hr.Position-pos).Magnitude if d<bd then bd=d best={Uid=rec.Uid,CFrame=rec.BoundsCFrame,Position=pos,Distance=d,Model=rec.PhysicalModel} end end end end end end return best end local lastRagScan=0 local lastRagScanRes=false local function IsRagdolled() local ch=o.Character local hu=ch and ch:FindFirstChildOfClass("Humanoid") if not hu then return false end local st=nil pcall(function() st=hu:GetState() end) if st==Enum.HumanoidStateType.Ragdoll or st==Enum.HumanoidStateType.Physics or st==Enum.HumanoidStateType.FallingDown then return true end if hu.PlatformStand then return true end if ch and os.clock()-lastRagScan>0.5 then lastRagScan=os.clock() lastRagScanRes=false for _,d in ipairs(ch:GetDescendants()) do if d:IsA("BallSocketConstraint") or d:IsA("HingeConstraint") then lastRagScanRes=true break end end end if lastRagScanRes then return true end return false end local function WaitForRagdoll(tm,sid) local t0=os.clock() tm=tm or 10 while os.clock()-t0<tm and h.alive do if sid and O4~=sid then return false end if not h.pureTweenFarm and not h.autoFarmLoop then return false end if IsRagdolled() then return true end task.wait(0.15) end return false end local function DecoyMainTarget(mode) local sid=O4 local now=os.clock() local main=nil if h.decoyN4Cache and h.decoyN4CacheT and now-h.decoyN4T<0.5 and h.decoyN4Cache.Uid then main=h.decoyN4Cache else pcall(function() main=N4() end) h.decoyN4Cache=main h.decoyN4T=now end if not main or not main.Uid then task.wait(0.25) return nil end local fails=(h.decoyFailCount and h.decoyFailCount[main.Uid]) or 0 if fails>=5 then h.decoyFailCount[main.Uid]=0 h.decoyDone=false h.mainTargetCache=nil end if h.decoyDone and h.mainTargetCache and h.mainTargetCache.Uid==main.Uid then return main end local decoy=nil pcall(function() decoy=GetNearestEgg() end) if not decoy or not decoy.Uid or decoy.Uid==main.Uid then h.decoyDone=true h.mainTargetCache=main return main end h.statusText=string.format("[Decoy] Grabbing nearest before main...") local ok=false if mode=="WARP" then local ch=o.Character local hr=ch and ch:FindFirstChild("HumanoidRootPart") if hr then pcall(function() RS(decoy.Position) end) V4(decoy.Position,8) pcall(function() ch:PivotTo(decoy.CFrame*CFrame.new(0,0.4,0)) end) local t1=os.clock()+2.5 while not w4(decoy.Uid) and os.clock()<t1 and h.alive do if sid and O4~=sid then break end pcall(function() d4(decoy.Model,decoy.Position) end) if i then pcall(function() if i:IsA("RemoteFunction") then i:InvokeServer({["Uid"]=decoy.Uid}) else i:FireServer({["Uid"]=decoy.Uid}) end end) end task.wait(0.2) end ok=w4(decoy.Uid) end else local rr=R4(decoy.CFrame*CFrame.new(0,0.4,0),h.glideSpeed,decoy.Uid,sid) if rr then local t1=os.clock()+2.5 while not w4(decoy.Uid) and os.clock()<t1 and h.alive do if sid and O4~=sid then break end pcall(function() d4(decoy.Model,decoy.Position) end) if i then pcall(function() if i:IsA("RemoteFunction") then i:InvokeServer({["Uid"]=decoy.Uid}) else i:FireServer({["Uid"]=decoy.Uid}) end end) end task.wait(0.2) end ok=w4(decoy.Uid) end end if not ok then X4[decoy.Uid]=os.clock()+2 return nil end h.statusText="[Decoy] Dropping decoy..." local t2=os.clock()+1.5 while w4(decoy.Uid) and os.clock()<t2 and h.alive do if sid and O4~=sid then return nil end pcall(u4) task.wait(0.12) end if not w4(decoy.Uid) then h.decoyDone=true h.mainTargetCache=main H("[Decoy] Dropped, switching to MAIN "..tostring(main.Uid)) return main end h.statusText="[Decoy] Drop failed, waiting ragdoll..." if WaitForRagdoll(10,sid) then pcall(u4) task.wait(0.15) pcall(u4) h.decoyDone=true h.mainTargetCache=main H("[Decoy] Ragdoll trigger, switching to MAIN "..tostring(main.Uid)) return main end X4[decoy.Uid]=os.clock()+2 return nil end T4=function(e,...)
     if Y4==e then
         return
     end
@@ -3525,7 +3523,7 @@ local Ck=os.clock ()task.spawn (function(...)
                     local u=w4()
                     if not u then
                         local u=O4
-                        local w=DecoyMainTarget("TWEEN") if not w then return end
+                        local w=DecoyMainTarget("TWEEN")
                         if w and(h.pureTweenFarm and(Y4== "TWEEN" and O4==u))then
                             if h.onTreadmill or L4()then
                                 h.statusText = "[AutoSteal] Target found! Getting off treadmill..." M4()task.wait ( 0.08 +math.random ()* 0.06 )
@@ -3621,7 +3619,7 @@ local qk=os.clock ()task.spawn (function(...)
                     local r=w4()
                     if not r then
                         local r=O4
-                        local y=DecoyMainTarget("WARP") if not y then return end
+                        local y=DecoyMainTarget("WARP")
                         if y and(h.autoFarmLoop and(Y4== "WARP" and O4==r))then
                             if h.onTreadmill or L4()then
                                 h.statusText = "[SnipeLoop] Target found! Getting off treadmill..." M4()task.wait ( 0.08 +math.random ()* 0.06 )
