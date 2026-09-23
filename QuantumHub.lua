@@ -31,7 +31,7 @@ if not LocalPlayer then
     warn("[Quantum Hub] FATAL: no LocalPlayer, aborting")
     return
 end
--- Delta mobile often injects before the game finishes loading.
+-- Some executors inject before the game finishes loading; wait it out.
 pcall(function()
     if not game:IsLoaded() then
         warn("[Quantum Hub] waiting for game load...")
