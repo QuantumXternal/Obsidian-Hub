@@ -1,0 +1,2298 @@
+-- ============================================================
+-- Quantum Hub (Self-Contained)
+-- Synthesized from local sources only. No external deps.
+-- ============================================================
+
+-- 1. Services and LocalPlayer ---------------------------------
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+local ProximityPromptService = game:GetService("ProximityPromptService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local LocalPlayer = Players.LocalPlayer
+
+-- Placeholder teleport locations.
+-- Base is exact. Others are reasonable placeholders: adjust later.
+local TeleportLocations = {
+    Base = CFrame.new(514, 71, -368),
+    Forest = CFrame.new(1000, 70, -500), -- TODO: adjust placeholder CFrame
+    Lake = CFrame.new(1500, 70, -600), -- TODO: adjust placeholder CFrame
+    Desert = CFrame.new(2000, 70, -700), -- TODO: adjust placeholder CFrame
+    Custom = CFrame.new(0, 0, 0), -- overwritten by Custom X,Y,Z textbox
+}
+
+local BASE_CFRAME = CFrame.new(514, 71, -368)
+
+-- 2. Theme (Obsidian Rose) -------------------------------------
+local Theme = {
+    Background   = Color3.fromRGB(26, 26, 29),
+    Panel        = Color3.fromRGB(36, 36, 42),
+    Outline      = Color3.fromRGB(60, 60, 70),
+    Accent       = Color3.fromRGB(179, 57, 90),
+    AccentHover  = Color3.fromRGB(200, 70, 105),
+    Text         = Color3.fromRGB(240, 230, 232),
+    TextDim      = Color3.fromRGB(160, 150, 155),
+    ButtonText   = Color3.fromRGB(255, 255, 255),
+}
+
+-- 3. Utility functions ------------------------------------------
+local Connections = {}
+local function TrackConnection(conn)
+    if conn then
+        table.insert(Connections, conn)
+    end
+    return conn
+end
+
+local function DisconnectAll()
+    for _, conn in ipairs(Connections) do
+        pcall(function()
+            conn:Disconnect()
+        end)
+    end
+    table.clear(Connections)
+end
+
+local function getRemote(path)
+    local ok, result = pcall(function()
+        return ReplicatedStorage:FindFirstChild(path, true)
+    end)
+    if not ok then
+        warn("[Quantum Hub] getRemote pcall failed for " .. tostring(path) .. ": " .. tostring(result))
+        return nil
+    end
+    if not result then
+        warn("[Quantum Hub] missing remote: " .. tostring(path))
+        return nil
+    end
+    return result
+end
+
+local function safeInvoke(remote, ...)
+    if not remote then
+        warn("[Quantum Hub] safeInvoke called with nil remote")
+        return false, nil
+    end
+    local args = { ... }
+    local ok, res = pcall(function()
+        return remote:InvokeServer(unpack(args))
+    end)
+    if not ok then
+        warn("[Quantum Hub] Invoke failed (" .. tostring(remote:GetFullName()) .. "): " .. tostring(res))
+        return false, nil
+    end
+    return true, res
+end
+
+local function safeFire(remote, ...)
+    if not remote then
+        warn("[Quantum Hub] safeFire called with nil remote")
+        return false
+    end
+    local args = { ... }
+    local ok, err = pcall(function()
+        remote:FireServer(unpack(args))
+    end)
+    if not ok then
+        warn("[Quantum Hub] Fire failed (" .. tostring(remote:GetFullName()) .. "): " .. tostring(err))
+        return false
+    end
+    return true
+end
+
+local function MakeDraggable(main, handle)
+    local dragging = false
+    local dragStart = nil
+    local startPos = nil
+    pcall(function()
+        handle.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = true
+                dragStart = input.Position
+                startPos = main.Position
+                input.Changed:Connect(function()
+                    if input.UserInputState == Enum.UserInputState.End then
+                        dragging = false
+                    end
+                end)
+            end
+        end)
+        UserInputService.InputChanged:Connect(function(input)
+            if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                local delta = input.Position - dragStart
+                main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            end
+        end)
+    end)
+end
+
+-- Forward declaration for toast (defined in section 8).
+local Notify
+
+local function ParseXYZ(str)
+    local ok, result = pcall(function()
+        local x, y, z = string.match(tostring(str), "([^,]+),([^,]+),([^,]+)")
+        if not x or not y or not z then
+            return nil
+        end
+        local nx, ny, nz = tonumber(x), tonumber(y), tonumber(z)
+        if not nx or not ny or not nz then
+            return nil
+        end
+        return CFrame.new(nx, ny, nz)
+    end)
+    if ok then
+        return result
+    end
+    return nil
+end
+
+local function GetCharacter()
+    local char = LocalPlayer and LocalPlayer.Character
+    return char
+end
+
+local function GetHRP()
+    local char = GetCharacter()
+    if char then
+        return char:FindFirstChild("HumanoidRootPart")
+    end
+    return nil
+end
+
+local function GetHumanoid()
+    local char = GetCharacter()
+    if char then
+        return char:FindFirstChildOfClass("Humanoid")
+    end
+    return nil
+end
+
+local function ApplyCorner(obj, radius)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, radius or 8)
+    c.Parent = obj
+    return c
+end
+
+local function ApplyStroke(obj, color, thickness)
+    local s = Instance.new("UIStroke")
+    s.Color = color or Theme.Outline
+    s.Thickness = thickness or 1
+    s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    s.Parent = obj
+    return s
+end
+
+-- 4. UI helper builders (Instance.new only) ---------------------
+
+local function styleButton(btn, accent)
+    btn.BackgroundColor3 = accent and Theme.Accent or Theme.Panel
+    btn.TextColor3 = Theme.ButtonText
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 13
+    btn.AutoButtonColor = true
+    btn.BorderSizePixel = 0
+    ApplyCorner(btn, 8)
+    ApplyStroke(btn, Theme.Outline, 1)
+end
+
+local function stylePanel(frame)
+    frame.BackgroundColor3 = Theme.Panel
+    frame.BorderSizePixel = 0
+    ApplyCorner(frame, 8)
+    ApplyStroke(frame, Theme.Outline, 1)
+end
+
+local function createWindow()
+    local playerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+    local old = playerGui:FindFirstChild("QuantumHub")
+    if old then
+        pcall(function()
+            old:Destroy()
+        end)
+    end
+
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "QuantumHub"
+    gui.ResetOnSpawn = false
+    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    gui.Parent = playerGui
+
+    local main = Instance.new("Frame")
+    main.Name = "Main"
+    main.Size = UDim2.new(0, 520, 0, 360)
+    main.Position = UDim2.new(0.5, 0, 0.5, 0)
+    main.AnchorPoint = Vector2.new(0.5, 0.5)
+    main.BackgroundColor3 = Theme.Background
+    main.BorderSizePixel = 0
+    main.Active = true
+    main.Parent = gui
+    ApplyCorner(main, 8)
+    ApplyStroke(main, Theme.Outline, 1)
+
+    local topBar = Instance.new("Frame")
+    topBar.Name = "TopBar"
+    topBar.Size = UDim2.new(1, 0, 0, 36)
+    topBar.BackgroundColor3 = Theme.Panel
+    topBar.BorderSizePixel = 0
+    topBar.Parent = main
+    ApplyCorner(topBar, 8)
+    ApplyStroke(topBar, Theme.Outline, 1)
+
+    local title = Instance.new("TextLabel")
+    title.Name = "Title"
+    title.Size = UDim2.new(1, -90, 1, 0)
+    title.Position = UDim2.new(0, 12, 0, 0)
+    title.BackgroundTransparency = 1
+    title.Text = "Quantum Hub"
+    title.TextColor3 = Theme.Text
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 15
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Parent = topBar
+
+    local minBtn = Instance.new("TextButton")
+    minBtn.Name = "Minimize"
+    minBtn.Size = UDim2.new(0, 30, 0, 24)
+    minBtn.Position = UDim2.new(1, -70, 0.5, -12)
+    minBtn.Text = "_"
+    styleButton(minBtn, false)
+    minBtn.Parent = topBar
+
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Name = "Close"
+    closeBtn.Size = UDim2.new(0, 30, 0, 24)
+    closeBtn.Position = UDim2.new(1, -36, 0.5, -12)
+    closeBtn.Text = "X"
+    styleButton(closeBtn, true)
+    closeBtn.Parent = topBar
+
+    local body = Instance.new("Frame")
+    body.Name = "Body"
+    body.Position = UDim2.new(0, 0, 0, 38)
+    body.Size = UDim2.new(1, 0, 1, -38)
+    body.BackgroundTransparency = 1
+    body.Parent = main
+
+    local sidebar = Instance.new("Frame")
+    sidebar.Name = "Sidebar"
+    sidebar.Size = UDim2.new(0, 130, 1, -10)
+    sidebar.Position = UDim2.new(0, 5, 0, 5)
+    sidebar.BackgroundColor3 = Theme.Panel
+    sidebar.BorderSizePixel = 0
+    sidebar.Parent = body
+    ApplyCorner(sidebar, 8)
+    ApplyStroke(sidebar, Theme.Outline, 1)
+
+    local sidePad = Instance.new("UIPadding")
+    sidePad.PaddingTop = UDim.new(0, 8)
+    sidePad.PaddingBottom = UDim.new(0, 8)
+    sidePad.PaddingLeft = UDim.new(0, 8)
+    sidePad.PaddingRight = UDim.new(0, 8)
+    sidePad.Parent = sidebar
+
+    local sideLayout = Instance.new("UIListLayout")
+    sideLayout.FillDirection = Enum.FillDirection.Vertical
+    sideLayout.Padding = UDim.new(0, 6)
+    sideLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    sideLayout.Parent = sidebar
+
+    local content = Instance.new("Frame")
+    content.Name = "Content"
+    content.Size = UDim2.new(1, -145, 1, -10)
+    content.Position = UDim2.new(0, 140, 0, 5)
+    content.BackgroundColor3 = Theme.Background
+    content.BorderSizePixel = 0
+    content.Parent = body
+    ApplyCorner(content, 8)
+    ApplyStroke(content, Theme.Outline, 1)
+
+    MakeDraggable(main, topBar)
+
+    local minimized = false
+    minBtn.MouseButton1Click:Connect(function()
+        minimized = not minimized
+        body.Visible = not minimized
+        if minimized then
+            main.Size = UDim2.new(0, 520, 0, 36)
+        else
+            main.Size = UDim2.new(0, 520, 0, 360)
+        end
+    end)
+
+    closeBtn.MouseButton1Click:Connect(function()
+        pcall(function()
+            DisconnectAll()
+            gui:Destroy()
+        end)
+    end)
+
+    return {
+        Gui = gui,
+        Main = main,
+        Sidebar = sidebar,
+        Content = content,
+    }
+end
+
+local TabRegistry = {}
+
+local function createTab(sidebar, content, name, order)
+    local btn = Instance.new("TextButton")
+    btn.Name = name .. "TabBtn"
+    btn.Size = UDim2.new(1, 0, 0, 32)
+    btn.Text = name
+    btn.LayoutOrder = order or #TabRegistry + 1
+    styleButton(btn, false)
+    btn.Parent = sidebar
+
+    local panel = Instance.new("ScrollingFrame")
+    panel.Name = name .. "Panel"
+    panel.Size = UDim2.new(1, -10, 1, -10)
+    panel.Position = UDim2.new(0, 5, 0, 5)
+    panel.BackgroundColor3 = Theme.Background
+    panel.BorderSizePixel = 0
+    panel.ScrollBarThickness = 4
+    panel.ScrollBarImageColor3 = Theme.Accent
+    panel.CanvasSize = UDim2.new(0, 0, 0, 0)
+    panel.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    panel.Visible = (#TabRegistry == 0)
+    panel.Parent = content
+    ApplyCorner(panel, 8)
+
+    local pad = Instance.new("UIPadding")
+    pad.PaddingTop = UDim.new(0, 8)
+    pad.PaddingBottom = UDim.new(0, 8)
+    pad.PaddingLeft = UDim.new(0, 8)
+    pad.PaddingRight = UDim.new(0, 8)
+    pad.Parent = panel
+
+    local layout = Instance.new("UIListLayout")
+    layout.FillDirection = Enum.FillDirection.Vertical
+    layout.Padding = UDim.new(0, 6)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = panel
+
+    local entry = { Name = name, Button = btn, Panel = panel }
+    table.insert(TabRegistry, entry)
+
+    local function refresh()
+        for _, t in ipairs(TabRegistry) do
+            local active = (t == entry)
+            t.Panel.Visible = active
+            t.Button.BackgroundColor3 = active and Theme.Accent or Theme.Panel
+        end
+    end
+
+    btn.MouseButton1Click:Connect(function()
+        for _, t in ipairs(TabRegistry) do
+            t.Panel.Visible = (t == entry)
+            t.Button.BackgroundColor3 = (t == entry) and Theme.Accent or Theme.Panel
+        end
+    end)
+
+    -- Highlight first tab by default
+    if #TabRegistry == 1 then
+        btn.BackgroundColor3 = Theme.Accent
+    end
+
+    return panel
+end
+
+local function createToggle(parent, name, default, callback)
+    local frame = Instance.new("Frame")
+    frame.Name = name .. "Toggle"
+    frame.Size = UDim2.new(1, 0, 0, 32)
+    frame.BackgroundColor3 = Theme.Panel
+    frame.BorderSizePixel = 0
+    frame.Parent = parent
+    ApplyCorner(frame, 8)
+    ApplyStroke(frame, Theme.Outline, 1)
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -80, 1, 0)
+    label.Position = UDim2.new(0, 10, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = name
+    label.TextColor3 = Theme.Text
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 13
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = frame
+
+    local state = default and true or false
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 56, 0, 22)
+    btn.Position = UDim2.new(1, -64, 0.5, -11)
+    btn.Text = state and "ON" or "OFF"
+    btn.BackgroundColor3 = state and Theme.Accent or Theme.Background
+    btn.TextColor3 = Theme.ButtonText
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 12
+    btn.BorderSizePixel = 0
+    btn.Parent = frame
+    ApplyCorner(btn, 8)
+    ApplyStroke(btn, Theme.Outline, 1)
+
+    local function set(v)
+        state = v and true or false
+        btn.Text = state and "ON" or "OFF"
+        btn.BackgroundColor3 = state and Theme.Accent or Theme.Background
+        if callback then
+            local ok, err = pcall(callback, state)
+            if not ok then
+                warn("[Quantum Hub] toggle callback failed (" .. tostring(name) .. "): " .. tostring(err))
+            end
+        end
+    end
+
+    btn.MouseButton1Click:Connect(function()
+        set(not state)
+    end)
+
+    -- Apply default silently (no callback) so caller wires initial state itself.
+    return frame, set
+end
+
+local function createCheckbox(parent, name, default, callback)
+    local frame = Instance.new("Frame")
+    frame.Name = name .. "Checkbox"
+    frame.Size = UDim2.new(1, 0, 0, 28)
+    frame.BackgroundTransparency = 1
+    frame.Parent = parent
+
+    local box = Instance.new("TextButton")
+    box.Size = UDim2.new(0, 20, 0, 20)
+    box.Position = UDim2.new(0, 2, 0.5, -10)
+    box.Text = ""
+    box.BackgroundColor3 = Theme.Panel
+    box.BorderSizePixel = 0
+    box.Parent = frame
+    ApplyCorner(box, 8)
+    ApplyStroke(box, Theme.Outline, 1)
+
+    local check = Instance.new("TextLabel")
+    check.Size = UDim2.new(1, 0, 1, 0)
+    check.BackgroundTransparency = 1
+    check.Text = default and "X" or ""
+    check.TextColor3 = Theme.Accent
+    check.Font = Enum.Font.GothamBold
+    check.TextSize = 14
+    check.Parent = box
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -32, 1, 0)
+    label.Position = UDim2.new(0, 28, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = name
+    label.TextColor3 = Theme.TextDim
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 13
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = frame
+
+    local state = default and true or false
+    local function set(v)
+        state = v and true or false
+        check.Text = state and "X" or ""
+        if callback then
+            local ok, err = pcall(callback, state)
+            if not ok then
+                warn("[Quantum Hub] checkbox callback failed (" .. tostring(name) .. "): " .. tostring(err))
+            end
+        end
+    end
+
+    box.MouseButton1Click:Connect(function()
+        set(not state)
+    end)
+
+    return frame, set
+end
+
+local function createSlider(parent, name, min, max, default, callback)
+    local frame = Instance.new("Frame")
+    frame.Name = name .. "Slider"
+    frame.Size = UDim2.new(1, 0, 0, 54)
+    frame.BackgroundColor3 = Theme.Panel
+    frame.BorderSizePixel = 0
+    frame.Parent = parent
+    ApplyCorner(frame, 8)
+    ApplyStroke(frame, Theme.Outline, 1)
+
+    local pad = Instance.new("UIPadding")
+    pad.PaddingLeft = UDim.new(0, 10)
+    pad.PaddingRight = UDim.new(0, 10)
+    pad.PaddingTop = UDim.new(0, 6)
+    pad.PaddingBottom = UDim.new(0, 6)
+    pad.Parent = frame
+
+    local topRow = Instance.new("Frame")
+    topRow.Size = UDim2.new(1, 0, 0, 16)
+    topRow.BackgroundTransparency = 1
+    topRow.Parent = frame
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0.7, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Text = name
+    label.TextColor3 = Theme.Text
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 13
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = topRow
+
+    local value = default
+    local valueLabel = Instance.new("TextLabel")
+    valueLabel.Size = UDim2.new(0.3, 0, 1, 0)
+    valueLabel.Position = UDim2.new(0.7, 0, 0, 0)
+    valueLabel.BackgroundTransparency = 1
+    valueLabel.Text = tostring(default)
+    valueLabel.TextColor3 = Theme.TextDim
+    valueLabel.Font = Enum.Font.Gotham
+    valueLabel.TextSize = 12
+    valueLabel.TextXAlignment = Enum.TextXAlignment.Right
+    valueLabel.Parent = topRow
+
+    local bar = Instance.new("TextButton")
+    bar.Name = "Bar"
+    bar.Size = UDim2.new(1, 0, 0, 10)
+    bar.Position = UDim2.new(0, 0, 0, 24)
+    bar.Text = ""
+    bar.BackgroundColor3 = Theme.Background
+    bar.BorderSizePixel = 0
+    bar.AutoButtonColor = false
+    bar.Parent = frame
+    ApplyCorner(bar, 8)
+    ApplyStroke(bar, Theme.Outline, 1)
+
+    local fill = Instance.new("Frame")
+    fill.Name = "Fill"
+    fill.Size = UDim2.new(0.5, 0, 1, 0)
+    fill.BackgroundColor3 = Theme.Accent
+    fill.BorderSizePixel = 0
+    fill.Parent = bar
+    ApplyCorner(fill, 8)
+
+    local function apply(v)
+        v = math.clamp(tonumber(v) or default, min, max)
+        value = v
+        local alpha = 0
+        if max ~= min then
+            alpha = (v - min) / (max - min)
+        end
+        fill.Size = UDim2.new(alpha, 0, 1, 0)
+        if math.abs(v) >= 100 then
+            valueLabel.Text = string.format("%.0f", v)
+        elseif max <= 1 or (max - min) < 2 then
+            valueLabel.Text = string.format("%.2f", v)
+        else
+            valueLabel.Text = string.format("%.1f", v)
+        end
+        if callback then
+            local ok, err = pcall(callback, v)
+            if not ok then
+                warn("[Quantum Hub] slider callback failed (" .. tostring(name) .. "): " .. tostring(err))
+            end
+        end
+    end
+
+    local dragging = false
+    local function updateFromInput(inputPos)
+        local absPos = bar.AbsolutePosition
+        local absSize = bar.AbsoluteSize
+        if absSize.X <= 0 then
+            return
+        end
+        local alpha = math.clamp((inputPos.X - absPos.X) / absSize.X, 0, 1)
+        apply(min + (max - min) * alpha)
+    end
+
+    bar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            updateFromInput(input.Position)
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            updateFromInput(input.Position)
+        end
+    end)
+
+    -- Init fill without firing callback
+    do
+        local alpha = 0
+        if max ~= min then
+            alpha = (default - min) / (max - min)
+        end
+        fill.Size = UDim2.new(math.clamp(alpha, 0, 1), 0, 1, 0)
+    end
+
+    return frame, apply
+end
+
+local function createDropdown(parent, name, options, default, callback)
+    local frame = Instance.new("Frame")
+    frame.Name = name .. "Dropdown"
+    frame.Size = UDim2.new(1, 0, 0, 32)
+    frame.BackgroundColor3 = Theme.Panel
+    frame.BorderSizePixel = 0
+    frame.Parent = parent
+    ApplyCorner(frame, 8)
+    ApplyStroke(frame, Theme.Outline, 1)
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0.45, 0, 1, 0)
+    label.Position = UDim2.new(0, 10, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = name
+    label.TextColor3 = Theme.Text
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 13
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = frame
+
+    local current = default
+    local mainBtn = Instance.new("TextButton")
+    mainBtn.Size = UDim2.new(0.5, -10, 0, 22)
+    mainBtn.Position = UDim2.new(0.5, 0, 0.5, -11)
+    mainBtn.Text = tostring(default) .. " v"
+    styleButton(mainBtn, true)
+    mainBtn.Parent = frame
+
+    local list = Instance.new("Frame")
+    list.Name = "Options"
+    list.Size = UDim2.new(1, 0, 0, #options * 26 + 8)
+    list.Position = UDim2.new(0, 0, 1, 4)
+    list.BackgroundColor3 = Theme.Background
+    list.BorderSizePixel = 0
+    list.Visible = false
+    list.ZIndex = 50
+    list.Parent = frame
+    ApplyCorner(list, 8)
+    ApplyStroke(list, Theme.Outline, 1)
+
+    local listLayout = Instance.new("UIListLayout")
+    listLayout.Padding = UDim.new(0, 2)
+    listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    listLayout.Parent = list
+
+    local listPad = Instance.new("UIPadding")
+    listPad.PaddingTop = UDim.new(0, 4)
+    listPad.PaddingBottom = UDim.new(0, 4)
+    listPad.PaddingLeft = UDim.new(0, 4)
+    listPad.PaddingRight = UDim.new(0, 4)
+    listPad.Parent = list
+
+    local function set(v)
+        current = v
+        mainBtn.Text = tostring(v) .. " v"
+        list.Visible = false
+        frame.Size = UDim2.new(1, 0, 0, 32)
+        if callback then
+            local ok, err = pcall(callback, v)
+            if not ok then
+                warn("[Quantum Hub] dropdown callback failed (" .. tostring(name) .. "): " .. tostring(err))
+            end
+        end
+    end
+
+    for i, opt in ipairs(options) do
+        local ob = Instance.new("TextButton")
+        ob.Size = UDim2.new(1, 0, 0, 24)
+        ob.LayoutOrder = i
+        ob.Text = tostring(opt)
+        ob.ZIndex = 51
+        styleButton(ob, false)
+        ob.Parent = list
+        ob.MouseButton1Click:Connect(function()
+            set(opt)
+        end)
+    end
+
+    mainBtn.MouseButton1Click:Connect(function()
+        list.Visible = not list.Visible
+        if list.Visible then
+            frame.Size = UDim2.new(1, 0, 0, 32 + #options * 26 + 12)
+        else
+            frame.Size = UDim2.new(1, 0, 0, 32)
+        end
+    end)
+
+    return frame, set
+end
+
+local function createButton(parent, name, callback)
+    local btn = Instance.new("TextButton")
+    btn.Name = name .. "Button"
+    btn.Size = UDim2.new(1, 0, 0, 32)
+    btn.Text = name
+    styleButton(btn, true)
+    btn.Parent = parent
+    btn.MouseButton1Click:Connect(function()
+        if callback then
+            local ok, err = pcall(callback)
+            if not ok then
+                warn("[Quantum Hub] button callback failed (" .. tostring(name) .. "): " .. tostring(err))
+            end
+        end
+    end)
+    btn.MouseEnter:Connect(function()
+        btn.BackgroundColor3 = Theme.AccentHover
+    end)
+    btn.MouseLeave:Connect(function()
+        btn.BackgroundColor3 = Theme.Accent
+    end)
+    return btn
+end
+
+local function createTextbox(parent, name, default, callback)
+    local frame = Instance.new("Frame")
+    frame.Name = name .. "Textbox"
+    frame.Size = UDim2.new(1, 0, 0, 32)
+    frame.BackgroundColor3 = Theme.Panel
+    frame.BorderSizePixel = 0
+    frame.Parent = parent
+    ApplyCorner(frame, 8)
+    ApplyStroke(frame, Theme.Outline, 1)
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0.4, 0, 1, 0)
+    label.Position = UDim2.new(0, 10, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = name
+    label.TextColor3 = Theme.Text
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 13
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = frame
+
+    local box = Instance.new("TextBox")
+    box.Size = UDim2.new(0.55, -10, 0, 22)
+    box.Position = UDim2.new(0.45, 0, 0.5, -11)
+    box.Text = tostring(default)
+    box.PlaceholderText = tostring(default)
+    box.BackgroundColor3 = Theme.Background
+    box.TextColor3 = Theme.Text
+    box.PlaceholderColor3 = Theme.TextDim
+    box.Font = Enum.Font.Gotham
+    box.TextSize = 12
+    box.ClearTextOnFocus = false
+    box.BorderSizePixel = 0
+    box.Parent = frame
+    ApplyCorner(box, 8)
+    ApplyStroke(box, Theme.Outline, 1)
+
+    box.FocusLost:Connect(function(enterPressed)
+        if callback then
+            local ok, err = pcall(callback, box.Text)
+            if not ok then
+                warn("[Quantum Hub] textbox callback failed (" .. tostring(name) .. "): " .. tostring(err))
+            end
+        end
+    end)
+
+    return frame, box
+end
+
+local function SectionLabel(parent, text)
+    local l = Instance.new("TextLabel")
+    l.Size = UDim2.new(1, 0, 0, 20)
+    l.BackgroundTransparency = 1
+    l.Text = text
+    l.TextColor3 = Theme.Accent
+    l.Font = Enum.Font.GothamBold
+    l.TextSize = 13
+    l.TextXAlignment = Enum.TextXAlignment.Left
+    l.Parent = parent
+    return l
+end
+
+-- 5. Module tables -----------------------------------------------
+
+-- KillAura --------------------------------------------------------
+local KillAura = {
+    Enabled = false,
+    Range = 16.5,
+    Priority = "Nearest",
+    AttackDelay = 0.1,
+    last = 0,
+    BatSwing = nil,
+    ToolGameplayGuard = nil,
+}
+
+function KillAura:CreateSeed()
+    local ok, res = pcall(function()
+        return ("%*:%*:%*"):format(LocalPlayer.UserId, 100, math.floor(Workspace:GetServerTimeNow() * 1000))
+    end)
+    if ok and res then
+        return res
+    end
+    return nil
+end
+
+function KillAura:EnsureRemotes()
+    if not self.BatSwing then
+        self.BatSwing = getRemote("RE/BatSwing/Trigger")
+    end
+    if not self.ToolGameplayGuard then
+        local ok, mod = pcall(function()
+            local client = ReplicatedStorage:FindFirstChild("Client")
+            if not client then
+                return nil
+            end
+            local m = client:FindFirstChild("ToolGameplayGuard")
+            if not m then
+                return nil
+            end
+            return require(m)
+        end)
+        if ok and mod then
+            self.ToolGameplayGuard = mod
+        else
+            warn("[Quantum Hub] KillAura missing ToolGameplayGuard: " .. tostring(mod))
+        end
+    end
+    return self.BatSwing ~= nil
+end
+
+function KillAura:CanUseTool()
+    local ok, res = pcall(function()
+        local c = LocalPlayer.Character
+        if not c then
+            return false
+        end
+        local t = c:FindFirstChildOfClass("Tool")
+        if not t or t:GetAttribute("ItemType") ~= "Gear" then
+            return false
+        end
+        local h = c:FindFirstChild("HumanoidRootPart")
+        if not h then
+            return false
+        end
+        if self.ToolGameplayGuard then
+            local insideOk, inside = pcall(function()
+                return self.ToolGameplayGuard.IsLocalInsideArena()
+            end)
+            if insideOk and inside then
+                return false
+            end
+        end
+        if Workspace:GetAttribute("Event_MonsterEvent") then
+            if h.Position.Z > -268 then
+                return true
+            end
+            return false
+        else
+            return true
+        end
+    end)
+    if ok then
+        return res
+    end
+    return false
+end
+
+function KillAura:GetTarget()
+    local ok, res = pcall(function()
+        local best = nil
+        local bestDist = math.huge
+        local bestHealth = math.huge
+        local candidates = {}
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p == LocalPlayer then
+                continue
+            end
+            local char = p.Character
+            if not char then
+                continue
+            end
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if not hrp then
+                continue
+            end
+            local dist = LocalPlayer:DistanceFromCharacter(hrp.Position)
+            if dist and dist <= self.Range then
+                if self.Priority == "Nearest" then
+                    if dist < bestDist then
+                        bestDist = dist
+                        best = p
+                    end
+                elseif self.Priority == "Lowest Health" then
+                    local hum = char:FindFirstChildOfClass("Humanoid")
+                    local hp = hum and hum.Health or math.huge
+                    if hp < bestHealth then
+                        bestHealth = hp
+                        best = p
+                    end
+                elseif self.Priority == "Random" then
+                    table.insert(candidates, p)
+                else
+                    if dist < bestDist then
+                        bestDist = dist
+                        best = p
+                    end
+                end
+            end
+        end
+        if self.Priority == "Random" and #candidates > 0 then
+            return candidates[math.random(1, #candidates)]
+        end
+        return best
+    end)
+    if ok then
+        return res
+    end
+    return nil
+end
+
+function KillAura:Attack(target)
+    if not self.BatSwing then
+        return
+    end
+    local seed = self:CreateSeed()
+    if not seed then
+        return
+    end
+    safeFire(self.BatSwing, target, seed)
+end
+
+function KillAura:Toggle(state)
+    self.Enabled = state and true or false
+    if self.Enabled then
+        if not self:EnsureRemotes() then
+            warn("[Quantum Hub] KillAura enabled but remote missing")
+        end
+        self.last = tick()
+    end
+end
+
+function KillAura:Run()
+    if not self.Enabled then
+        return
+    end
+    local target = self:GetTarget()
+    if target then
+        if tick() - self.last >= (self.AttackDelay or 0.1) then
+            if self:CanUseTool() then
+                self:Attack(target)
+                self.last = tick()
+            end
+        end
+    end
+end
+
+-- NoKnockback -----------------------------------------------------
+local NoKnockback = {
+    Enabled = false,
+    RigSync = nil,
+}
+
+function NoKnockback:Toggle(state)
+    self.Enabled = state and true or false
+    if self.Enabled then
+        local remote = getRemote("RE/RigSync/Refresh")
+        if not remote then
+            warn("[Quantum Hub] NoKnockback: remote not found")
+            return
+        end
+        self.RigSync = remote
+        if not getconnections then
+            warn("[Quantum Hub] NoKnockback requires getconnections")
+            return
+        end
+        local ok, conns = pcall(function()
+            return getconnections(remote.OnClientEvent)
+        end)
+        if not ok or not conns then
+            warn("[Quantum Hub] NoKnockback failed to get connections: " .. tostring(conns))
+            return
+        end
+        local patched = 0
+        pcall(function()
+            for _, conn in ipairs(conns) do
+                conn:Disconnect()
+                patched = patched + 1
+            end
+        end)
+        warn("[Quantum Hub] NoKnockback patched " .. tostring(patched) .. " connections")
+        if Notify then
+            Notify("NoKnockback: patched " .. tostring(patched))
+        end
+    else
+        warn("[Quantum Hub] NoKnockback disabled: rejoin required to restore knockback")
+        if Notify then
+            Notify("NoKnockback off: rejoin to restore")
+        end
+    end
+end
+
+-- InstantInteract -------------------------------------------------
+local InstantInteract = {
+    Enabled = false,
+    Conn = nil,
+}
+
+function InstantInteract:Toggle(state)
+    self.Enabled = state and true or false
+    if self.Conn then
+        pcall(function()
+            self.Conn:Disconnect()
+        end)
+        self.Conn = nil
+    end
+    if self.Enabled then
+        local ok, conn = pcall(function()
+            return ProximityPromptService.PromptButtonHoldBegan:Connect(function(prompt, player)
+                if player == LocalPlayer and tostring(prompt) == "CarryAreaEgg" then
+                    pcall(function()
+                        prompt.HoldDuration = 0
+                    end)
+                end
+            end)
+        end)
+        if ok and conn then
+            self.Conn = TrackConnection(conn)
+        else
+            warn("[Quantum Hub] InstantInteract failed to bind: " .. tostring(conn))
+        end
+    end
+end
+
+-- AutoBuy ---------------------------------------------------------
+local AutoBuy = {
+    Enabled = false,
+    BuyTreadmills = true,
+    BuyBases = true,
+    BuyTrails = true,
+    MaxSpend = 1000000,
+    Treadmills = nil,
+    Trails = nil,
+    Bases = nil,
+    Save = nil,
+    TrailRemote = nil,
+    TreadmillRemote = nil,
+    BaseRemote = nil,
+}
+
+function AutoBuy:CanAfford(m, c)
+    local ok, res = pcall(function()
+        m = tonumber(m)
+        c = tonumber(c)
+        if not m or not c then
+            return false
+        end
+        return m >= c
+    end)
+    if ok then
+        return res
+    end
+    return false
+end
+
+function AutoBuy:EnsureData()
+    if not self.Treadmills then
+        pcall(function()
+            local data = ReplicatedStorage:FindFirstChild("Data")
+            if data then
+                local m = data:FindFirstChild("Treadmills")
+                if m then
+                    self.Treadmills = require(m)
+                end
+            end
+        end)
+    end
+    if not self.Trails then
+        pcall(function()
+            local data = ReplicatedStorage:FindFirstChild("Data")
+            if data then
+                local m = data:FindFirstChild("Trails")
+                if m then
+                    self.Trails = require(m)
+                end
+            end
+        end)
+    end
+    if not self.Bases then
+        pcall(function()
+            local data = ReplicatedStorage:FindFirstChild("Data")
+            if data then
+                local m = data:FindFirstChild("Bases")
+                if m then
+                    self.Bases = require(m)
+                end
+            end
+        end)
+    end
+    if not self.Save then
+        pcall(function()
+            local shared = ReplicatedStorage:FindFirstChild("Shared")
+            if shared then
+                local m = shared:FindFirstChild("Save")
+                if m then
+                    self.Save = require(m)
+                end
+            end
+        end)
+    end
+    if not self.TrailRemote then
+        self.TrailRemote = getRemote("RF/Trailwear/AskPurchase")
+    end
+    if not self.TreadmillRemote then
+        self.TreadmillRemote = getRemote("RF/Treadmill/AskTierRaise")
+    end
+    if not self.BaseRemote then
+        self.BaseRemote = getRemote("RE/Homestead/AskBaseTierRaise")
+    end
+end
+
+function AutoBuy:GetTreadmills(saveData)
+    local out = {}
+    local ok, res = pcall(function()
+        local list = {}
+        local l = saveData.TreadmillUpgradeLevel
+        for id, t in pairs(self.Treadmills.Directory) do
+            local lvl = self.Treadmills.GetUpgradeLevel(id)
+            if lvl and lvl > l and self:CanAfford(saveData.Money, t.Price) and tonumber(t.Price) <= (self.MaxSpend or math.huge) then
+                table.insert(list, id)
+            end
+        end
+        return list
+    end)
+    if ok and res then
+        out = res
+    end
+    return out
+end
+
+function AutoBuy:GetTrails(saveData)
+    local out = {}
+    local ok, res = pcall(function()
+        local list = {}
+        for _, trial in pairs(self.Trails.Directory) do
+            if not saveData.TrailInventory[trial._id] and self:CanAfford(saveData.Money, trial.Price) and tonumber(trial.Price) <= (self.MaxSpend or math.huge) then
+                table.insert(list, trial._id)
+            end
+        end
+        return list
+    end)
+    if ok and res then
+        out = res
+    end
+    return out
+end
+
+function AutoBuy:GetBaseUpgradeable(saveData)
+    local ok, res = pcall(function()
+        local l = saveData.BaseUpgradeLevel + 1
+        local n = self.Bases.BASES[l]
+        if not n then
+            return false
+        end
+        if tonumber(n.Cost) and tonumber(n.Cost) > (self.MaxSpend or math.huge) then
+            return false
+        end
+        return self:CanAfford(saveData.Money, n.Cost)
+    end)
+    if ok then
+        return res
+    end
+    return false
+end
+
+function AutoBuy:Run()
+    if not self.Enabled then
+        return
+    end
+    self:EnsureData()
+    if not self.Save then
+        return
+    end
+    local ok, saveData = pcall(function()
+        return self.Save.Get()
+    end)
+    if not ok or not saveData then
+        return
+    end
+    pcall(function()
+        if self.BuyTrails and self.Trails and self.TrailRemote then
+            for _, trail in ipairs(self:GetTrails(saveData)) do
+                warn("[Quantum Hub] purchased trail: " .. tostring(trail))
+                safeInvoke(self.TrailRemote, trail)
+                task.wait(0.1)
+            end
+        end
+        if self.BuyTreadmills and self.Treadmills and self.TreadmillRemote then
+            -- Refresh money mid-cycle so MaxSpend is respected
+            local d = saveData
+            for _, id in ipairs(self:GetTreadmills(d)) do
+                warn("[Quantum Hub] purchased treadmill: " .. tostring(id))
+                safeInvoke(self.TreadmillRemote, id)
+                task.wait(0.1)
+            end
+        end
+        if self.BuyBases and self.Bases and self.BaseRemote then
+            if self:GetBaseUpgradeable(saveData) then
+                safeFire(self.BaseRemote)
+            end
+        end
+    end)
+end
+
+function AutoBuy:Toggle(state)
+    self.Enabled = state and true or false
+    if self.Enabled then
+        self:EnsureData()
+    end
+end
+
+-- AutoSell --------------------------------------------------------
+local AutoSell = {
+    Enabled = false,
+    Rarities = {
+        Common = true,
+        Uncommon = true,
+        Rare = true,
+        Epic = true,
+        Legendary = true,
+        Mythic = true,
+    },
+    Save = nil,
+    Assets = nil,
+    WearRemote = nil,
+    SellRemote = nil,
+}
+
+function AutoSell:EnsureData()
+    if not self.Save then
+        pcall(function()
+            local shared = ReplicatedStorage:FindFirstChild("Shared")
+            if shared then
+                local m = shared:FindFirstChild("Save")
+                if m then
+                    self.Save = require(m)
+                end
+            end
+        end)
+    end
+    if not self.Assets then
+        pcall(function()
+            local data = ReplicatedStorage:FindFirstChild("Data")
+            if data then
+                local m = data:FindFirstChild("Assets")
+                if m then
+                    self.Assets = require(m)
+                end
+            end
+        end)
+    end
+    if not self.WearRemote then
+        self.WearRemote = getRemote("RF/EggWorld/AskWearTool")
+    end
+    if not self.SellRemote then
+        self.SellRemote = getRemote("RE/PetSatchel/SellPet")
+    end
+end
+
+function AutoSell:Run()
+    if not self.Enabled then
+        return
+    end
+    self:EnsureData()
+    if not self.Save or not self.Assets then
+        return
+    end
+    local ok, data = pcall(function()
+        return self.Save.Get()
+    end)
+    if not ok or not data then
+        return
+    end
+    local inv = data.EggInventory
+    if not inv then
+        return
+    end
+    pcall(function()
+        for uid, eggdata in pairs(inv) do
+            if not self.Enabled then
+                break
+            end
+            if eggdata.Placement then
+                continue
+            end
+            local rok, rarity = pcall(function()
+                return self.Assets.Directory[eggdata.AssetCategory].Rarity.DisplayName
+            end)
+            if rok and rarity and self.Rarities[rarity] then
+                safeInvoke(self.WearRemote, uid)
+                safeFire(self.SellRemote, { uid })
+                task.wait(0.1)
+            end
+        end
+    end)
+end
+
+function AutoSell:Toggle(state)
+    self.Enabled = state and true or false
+    if self.Enabled then
+        self:EnsureData()
+    end
+end
+
+-- AutoFarm --------------------------------------------------------
+local AutoFarm = {
+    Enabled = false,
+    MinArea = 9,
+    ReturnToBase = true,
+    CycleDelay = 5,
+    Areas = {
+        "Forest",
+        "Lake",
+        "Desert",
+        "Jungle",
+        "Snow",
+        "Volcano",
+        "Abyss Ocean",
+        "Prehistoric",
+        "Cosmic",
+        "Cherry Blossom",
+        "Titan Temple",
+        "Light Dark",
+    },
+    EggState = nil,
+    Token = 0,
+}
+
+function AutoFarm:EnsureData()
+    if not self.EggState then
+        pcall(function()
+            local client = ReplicatedStorage:FindFirstChild("Client")
+            if client then
+                local m = client:FindFirstChild("EggState")
+                if m then
+                    self.EggState = require(m)
+                end
+            end
+        end)
+    end
+end
+
+function AutoFarm:GetBestEgg()
+    local ok, res = pcall(function()
+        local egg = nil
+        local bestArea = 0
+        local records = self.EggState.ReadFieldEggs().Records
+        for _, data in pairs(records) do
+            local idx = table.find(self.Areas, data.AreaId)
+            if idx and idx >= (self.MinArea or 1) then
+                if idx > bestArea then
+                    bestArea = idx
+                    egg = data
+                end
+            end
+        end
+        return egg
+    end)
+    if ok then
+        return res
+    end
+    return nil
+end
+
+function AutoFarm:GoTo(cframePos)
+    pcall(function()
+        local hrp = GetHRP()
+        local char = GetCharacter()
+        if not hrp or not char then
+            return
+        end
+        local target = cframePos
+        if typeof(cframePos) == "table" and cframePos.BoundsCFrame then
+            target = cframePos.BoundsCFrame
+        end
+        if typeof(target) ~= "CFrame" then
+            return
+        end
+        local dist = math.huge
+        local t0 = tick()
+        repeat
+            local dt = task.wait(0.01)
+            hrp = GetHRP()
+            char = GetCharacter()
+            if not hrp or not char then
+                break
+            end
+            local start = hrp.Position
+            dist = (target.Position - start).Magnitude
+            if dist <= 5 then
+                break
+            end
+            local dir = (target.Position - start)
+            if dir.Magnitude > 0 then
+                local step = start + dir.Unit * dt * 430
+                pcall(function()
+                    char:MoveTo(step)
+                end)
+            end
+            if tick() - t0 > 30 then
+                break
+            end
+        until dist <= 5
+    end)
+end
+
+function AutoFarm:GetPromptForEgg(egg)
+    local ok, res = pcall(function()
+        local targetPos = nil
+        if typeof(egg) == "table" and egg.BoundsCFrame then
+            targetPos = egg.BoundsCFrame.Position
+        elseif typeof(egg) == "CFrame" then
+            targetPos = egg.Position
+        else
+            return nil
+        end
+        local closest = nil
+        local closestDist = math.huge
+        for _, v in ipairs(Workspace:GetDescendants()) do
+            if v.Name == "#CarryAreaEgg" then
+                local p = v.Parent
+                local base = nil
+                if p and p:IsA("BasePart") then
+                    base = p
+                elseif p and p:IsA("ProximityPrompt") then
+                    base = p.Parent
+                    if base and not base:IsA("BasePart") then
+                        base = nil
+                    end
+                end
+                if v:IsA("ProximityPrompt") then
+                    local holder = v.Parent
+                    if holder and holder:IsA("BasePart") then
+                        local d = (targetPos - holder.Position).Magnitude
+                        if d < closestDist then
+                            closestDist = d
+                            closest = v
+                        end
+                    end
+                elseif base then
+                    local pr = base:FindFirstChildOfClass("ProximityPrompt")
+                    if pr then
+                        local d = (targetPos - base.Position).Magnitude
+                        if d < closestDist then
+                            closestDist = d
+                            closest = pr
+                        end
+                    end
+                end
+            end
+        end
+        -- Fallback: any CarryAreaEgg prompt
+        if not closest then
+            for _, v in ipairs(Workspace:GetDescendants()) do
+                if v:IsA("ProximityPrompt") and tostring(v) == "CarryAreaEgg" then
+                    return v
+                end
+            end
+        end
+        return closest
+    end)
+    if ok then
+        return res
+    end
+    return nil
+end
+
+function AutoFarm:FarmOnce()
+    local egg = self:GetBestEgg()
+    if egg then
+        self:GoTo(BASE_CFRAME)
+        task.wait(0.1)
+        self:GoTo(egg)
+        task.wait(0.5)
+        local prompt = self:GetPromptForEgg(egg)
+        if prompt and fireproximityprompt then
+            pcall(function()
+                fireproximityprompt(prompt)
+            end)
+        end
+        task.wait(2)
+        if prompt and fireproximityprompt then
+            pcall(function()
+                local stillThere = self:GetPromptForEgg(egg)
+                if stillThere then
+                    fireproximityprompt(stillThere)
+                end
+            end)
+        end
+        if self.ReturnToBase then
+            self:GoTo(BASE_CFRAME)
+            task.wait(0.1)
+        end
+    else
+        if self.ReturnToBase then
+            self:GoTo(BASE_CFRAME)
+            task.wait(0.5)
+        else
+            task.wait(0.5)
+        end
+    end
+end
+
+function AutoFarm:Toggle(state)
+    self.Enabled = state and true or false
+    if self.Enabled then
+        if not fireproximityprompt then
+            warn("[Quantum Hub] AutoFarm requires fireproximityprompt")
+            if Notify then
+                Notify("AutoFarm needs fireproximityprompt")
+            end
+            self.Enabled = false
+            return
+        end
+        self:EnsureData()
+        self.Token = self.Token + 1
+        local myToken = self.Token
+        task.spawn(function()
+            while self.Enabled and myToken == self.Token do
+                local ok, err = pcall(function()
+                    self:FarmOnce()
+                end)
+                if not ok then
+                    warn("[Quantum Hub] AutoFarm cycle failed: " .. tostring(err))
+                end
+                local delay = math.clamp(tonumber(self.CycleDelay) or 5, 1, 20)
+                local waited = 0
+                while waited < delay and self.Enabled and myToken == self.Token do
+                    task.wait(0.25)
+                    waited = waited + 0.25
+                end
+            end
+        end)
+    else
+        self.Token = self.Token + 1
+    end
+end
+
+-- AutoRedeem ------------------------------------------------------
+local AutoRedeem = {
+    Enabled = false,
+    Interval = 1,
+    RedeemRemote = nil,
+    Token = 0,
+}
+
+function AutoRedeem:Toggle(state)
+    self.Enabled = state and true or false
+    if self.Enabled then
+        if not self.RedeemRemote then
+            self.RedeemRemote = getRemote("RF/Codex/AskRedeemAll")
+        end
+        self.Token = self.Token + 1
+        local myToken = self.Token
+        task.spawn(function()
+            while self.Enabled and myToken == self.Token do
+                pcall(function()
+                    if self.RedeemRemote then
+                        safeInvoke(self.RedeemRemote)
+                    else
+                        self.RedeemRemote = getRemote("RF/Codex/AskRedeemAll")
+                    end
+                end)
+                task.wait(math.clamp(tonumber(self.Interval) or 1, 1, 10))
+            end
+        end)
+    else
+        self.Token = self.Token + 1
+    end
+end
+
+-- SpeedBypass -----------------------------------------------------
+local SpeedBypass = {
+    Enabled = false,
+    WalkSpeed = 500,
+    SafeMode = true,
+    Hooked = false,
+    SpeedConn = nil,
+}
+
+function SpeedBypass:CollectGC()
+    local ok, res = pcall(function()
+        return getgc()
+    end)
+    if ok and res then
+        return res
+    end
+    warn("[Quantum Hub] SpeedBypass failed to get gc: " .. tostring(res))
+    return nil
+end
+
+function SpeedBypass:SafeHook(f, c)
+    local ok, res = pcall(function()
+        return hookfunction(f, newlclosure(c))
+    end)
+    if ok and res then
+        return res
+    end
+    warn("[Quantum Hub] SpeedBypass failed to hook: " .. tostring(res))
+    return nil
+end
+
+function SpeedBypass:FindFunction(nups, linedefined)
+    local ok, res = pcall(function()
+        local gc = self:CollectGC()
+        if not gc then
+            return nil
+        end
+        for _, f in pairs(gc) do
+            if typeof(f) == "function" and islclosure(f) then
+                local upvs = debug.getupvalues(f)
+                local line = debug.info(f, "l")
+                if upvs and #upvs == nups and line == linedefined then
+                    if nups == 10 then
+                        local t = debug.getupvalue(f, 3)
+                        if typeof(t) == "table" and rawget(t, "Humanoid") then
+                            return f
+                        end
+                    else
+                        return f
+                    end
+                end
+            end
+        end
+        return nil
+    end)
+    if ok then
+        return res
+    end
+    return nil
+end
+
+function SpeedBypass:InitHook()
+    if self.Hooked then
+        return true
+    end
+    if not getgc then
+        warn("[Quantum Hub] SpeedBypass missing getgc")
+        return false
+    end
+    if not hookfunction then
+        warn("[Quantum Hub] SpeedBypass missing hookfunction")
+        return false
+    end
+    if not islclosure then
+        warn("[Quantum Hub] SpeedBypass missing islclosure")
+        return false
+    end
+    local func3
+    pcall(function()
+        local gc = self:CollectGC()
+        if not gc then
+            return
+        end
+        for _, f in pairs(gc) do
+            if typeof(f) == "function" and islclosure(f) then
+                local upvs = debug.getupvalues(f)
+                local line = debug.info(f, "l")
+                if upvs and #upvs == 19 and line == 640 then
+                    func3 = f
+                    break
+                end
+            end
+        end
+    end)
+    if not func3 then
+        warn("[Quantum Hub] SpeedBypass: target function (19 upvalues, line 640) not found")
+        return false
+    end
+    local v7 = nil
+    pcall(function()
+        v7 = debug.getupvalue(func3, 2)
+    end)
+    if not v7 then
+        warn("[Quantum Hub] SpeedBypass: upvalue 2 missing")
+        return false
+    end
+    local hooked
+    hooked = self:SafeHook(v7, function(p1, p2)
+        if p2 and typeof(p2) == "table" then
+            pcall(function()
+                setmetatable(p2, {})
+            end)
+        end
+        return hooked(p1, p2)
+    end)
+    if not hooked then
+        return false
+    end
+    self.Hooked = true
+    return true
+end
+
+function SpeedBypass:Toggle(state)
+    self.Enabled = state and true or false
+    if self.Enabled then
+        local okHook = false
+        pcall(function()
+            okHook = self:InitHook()
+        end)
+        if not okHook then
+            warn("[Quantum Hub] SpeedBypass hook failed, WalkSpeed only")
+        end
+        if self.SpeedConn then
+            pcall(function()
+                self.SpeedConn:Disconnect()
+            end)
+            self.SpeedConn = nil
+        end
+        local ok, conn = pcall(function()
+            return RunService.Heartbeat:Connect(function()
+                if not self.Enabled then
+                    return
+                end
+                local char = LocalPlayer.Character
+                if not char then
+                    return
+                end
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if not hum then
+                    return
+                end
+                local want = tonumber(self.WalkSpeed) or 500
+                if self.SafeMode and want > 500 then
+                    want = 500
+                end
+                pcall(function()
+                    hum.WalkSpeed = want
+                end)
+            end)
+        end)
+        if ok and conn then
+            self.SpeedConn = TrackConnection(conn)
+        end
+    else
+        if self.SpeedConn then
+            pcall(function()
+                self.SpeedConn:Disconnect()
+            end)
+            self.SpeedConn = nil
+        end
+        pcall(function()
+            local hum = GetHumanoid()
+            if hum then
+                hum.WalkSpeed = 16
+            end
+        end)
+    end
+end
+
+-- Glide -----------------------------------------------------------
+local Glide = {
+    Enabled = false,
+    Speed = 50,
+    BV = nil,
+}
+
+function Glide:Toggle(state)
+    self.Enabled = state and true or false
+    if self.BV then
+        pcall(function()
+            self.BV:Destroy()
+        end)
+        self.BV = nil
+    end
+    if self.Enabled then
+        local hrp = GetHRP()
+        if not hrp then
+            warn("[Quantum Hub] Glide: no HumanoidRootPart")
+            return
+        end
+        local ok, bv = pcall(function()
+            local b = Instance.new("BodyVelocity")
+            b.MaxForce = Vector3.new(0, 1e5, 0)
+            b.Velocity = Vector3.new(0, -(tonumber(self.Speed) or 50) * 0.1, 0)
+            b.Parent = hrp
+            return b
+        end)
+        if ok and bv then
+            self.BV = bv
+        end
+    end
+end
+
+function Glide:Refresh()
+    if self.Enabled and self.BV then
+        pcall(function()
+            local hrp = GetHRP()
+            if not hrp then
+                return
+            end
+            if self.BV.Parent ~= hrp then
+                self.BV.Parent = hrp
+            end
+            self.BV.Velocity = Vector3.new(0, -(tonumber(self.Speed) or 50) * 0.1, 0)
+        end)
+    end
+end
+
+-- Blink -----------------------------------------------------------
+local Blink = {
+    Enabled = false,
+    Distance = 20,
+    LastBlink = 0,
+}
+
+function Blink:Toggle(state)
+    self.Enabled = state and true or false
+end
+
+function Blink:BlinkNow()
+    if tick() - (self.LastBlink or 0) < 0.5 then
+        return
+    end
+    self.LastBlink = tick()
+    pcall(function()
+        local hrp = GetHRP()
+        if not hrp then
+            return
+        end
+        local d = math.clamp(tonumber(self.Distance) or 20, 5, 100)
+        hrp.CFrame = hrp.CFrame + (hrp.CFrame.LookVector * d)
+    end)
+end
+
+-- Fly -------------------------------------------------------------
+local Fly = {
+    Enabled = false,
+    Speed = 50,
+    BV = nil,
+    FlyConn = nil,
+}
+
+function Fly:Toggle(state)
+    self.Enabled = state and true or false
+    if self.BV then
+        pcall(function()
+            self.BV:Destroy()
+        end)
+        self.BV = nil
+    end
+    if self.FlyConn then
+        pcall(function()
+            self.FlyConn:Disconnect()
+        end)
+        self.FlyConn = nil
+    end
+    if self.Enabled then
+        local hrp = GetHRP()
+        if not hrp then
+            warn("[Quantum Hub] Fly: no HumanoidRootPart")
+            return
+        end
+        local ok, bv = pcall(function()
+            local b = Instance.new("BodyVelocity")
+            b.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+            b.Velocity = Vector3.new(0, 0, 0)
+            b.Parent = hrp
+            return b
+        end)
+        if ok and bv then
+            self.BV = bv
+        else
+            return
+        end
+        local ok2, conn = pcall(function()
+            return RunService.RenderStepped:Connect(function()
+                if not self.Enabled or not self.BV then
+                    return
+                end
+                local hrpNow = GetHRP()
+                if not hrpNow then
+                    return
+                end
+                if self.BV.Parent ~= hrpNow then
+                    self.BV.Parent = hrpNow
+                end
+                local cam = Workspace.CurrentCamera
+                if not cam then
+                    return
+                end
+                local speed = tonumber(self.Speed) or 50
+                local dir = Vector3.new(0, 0, 0)
+                pcall(function()
+                    local cf = cam.CFrame
+                    local forward = Vector3.new(cf.LookVector.X, 0, cf.LookVector.Z)
+                    if forward.Magnitude > 0 then
+                        forward = forward.Unit
+                    end
+                    local right = Vector3.new(cf.RightVector.X, 0, cf.RightVector.Z)
+                    if right.Magnitude > 0 then
+                        right = right.Unit
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                        dir = dir + forward
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                        dir = dir - forward
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                        dir = dir + right
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                        dir = dir - right
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                        dir = dir + Vector3.new(0, 1, 0)
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+                        dir = dir - Vector3.new(0, 1, 0)
+                    end
+                    if dir.Magnitude > 0 then
+                        dir = dir.Unit * speed
+                    end
+                end)
+                pcall(function()
+                    self.BV.Velocity = dir
+                end)
+            end)
+        end)
+        if ok2 and conn then
+            self.FlyConn = TrackConnection(conn)
+        end
+    end
+end
+
+-- Teleport --------------------------------------------------------
+local Teleport = {
+    Location = "Base",
+    Custom = "0,0,0",
+}
+
+function Teleport:TeleportNow()
+    local dest = nil
+    pcall(function()
+        if self.Location == "Custom" then
+            dest = ParseXYZ(self.Custom)
+            if not dest then
+                warn("[Quantum Hub] Teleport: bad Custom X,Y,Z: " .. tostring(self.Custom))
+                return
+            end
+        else
+            dest = TeleportLocations[self.Location]
+            if not dest then
+                dest = BASE_CFRAME
+            end
+        end
+    end)
+    if not dest then
+        return
+    end
+    pcall(function()
+        local hrp = GetHRP()
+        if hrp then
+            hrp.CFrame = dest
+        else
+            local char = GetCharacter()
+            if char then
+                char:MoveTo(dest.Position)
+            end
+        end
+    end)
+end
+
+-- 6. UI construction using the helpers -----------------------------
+
+local Window = createWindow()
+local Sidebar = Window.Sidebar
+local Content = Window.Content
+
+local MainTab = createTab(Sidebar, Content, "Main", 1)
+local MovementTab = createTab(Sidebar, Content, "Movement", 2)
+local AutomationTab = createTab(Sidebar, Content, "Automation", 3)
+local SettingsTab = createTab(Sidebar, Content, "Settings", 4)
+
+-- Tab 1: Main (Combat)
+SectionLabel(MainTab, "Combat")
+createToggle(MainTab, "Kill Aura", false, function(v)
+    KillAura:Toggle(v)
+end)
+createSlider(MainTab, "Range", 5, 30, 16.5, function(v)
+    KillAura.Range = v
+end)
+createDropdown(MainTab, "Priority", { "Nearest", "Lowest Health", "Random" }, "Nearest", function(v)
+    KillAura.Priority = v
+end)
+createSlider(MainTab, "Attack Delay", 0.05, 0.5, 0.1, function(v)
+    KillAura.AttackDelay = v
+end)
+createToggle(MainTab, "No Knockback", false, function(v)
+    NoKnockback:Toggle(v)
+end)
+createToggle(MainTab, "Instant Interact", false, function(v)
+    InstantInteract:Toggle(v)
+end)
+
+-- Tab 2: Movement
+SectionLabel(MovementTab, "Speed")
+createToggle(MovementTab, "Speed Bypass", false, function(v)
+    SpeedBypass:Toggle(v)
+end)
+createSlider(MovementTab, "Walk Speed", 100, 5000, 500, function(v)
+    SpeedBypass.WalkSpeed = v
+end)
+createCheckbox(MovementTab, "Safe Mode (cap 500)", true, function(v)
+    SpeedBypass.SafeMode = v
+end)
+
+SectionLabel(MovementTab, "Glide")
+createToggle(MovementTab, "Glide", false, function(v)
+    Glide:Toggle(v)
+end)
+createSlider(MovementTab, "Glide Speed", 10, 200, 50, function(v)
+    Glide.Speed = v
+    Glide:Refresh()
+end)
+
+SectionLabel(MovementTab, "Blink")
+createToggle(MovementTab, "Blink", false, function(v)
+    Blink:Toggle(v)
+end)
+createSlider(MovementTab, "Distance", 5, 100, 20, function(v)
+    Blink.Distance = v
+end)
+createButton(MovementTab, "Blink Now", function()
+    Blink:BlinkNow()
+end)
+
+SectionLabel(MovementTab, "Fly")
+createToggle(MovementTab, "Fly", false, function(v)
+    Fly:Toggle(v)
+end)
+createSlider(MovementTab, "Fly Speed", 20, 200, 50, function(v)
+    Fly.Speed = v
+end)
+
+SectionLabel(MovementTab, "Teleport")
+createDropdown(MovementTab, "Location", { "Base", "Forest", "Lake", "Desert", "Custom" }, "Base", function(v)
+    Teleport.Location = v
+end)
+createTextbox(MovementTab, "Custom X,Y,Z", "0,0,0", function(v)
+    Teleport.Custom = v
+end)
+createButton(MovementTab, "Teleport", function()
+    Teleport:TeleportNow()
+end)
+
+-- Tab 3: Automation
+SectionLabel(AutomationTab, "Auto Buy")
+createToggle(AutomationTab, "Auto Buy", false, function(v)
+    AutoBuy:Toggle(v)
+end)
+createCheckbox(AutomationTab, "Treadmills", true, function(v)
+    AutoBuy.BuyTreadmills = v
+end)
+createCheckbox(AutomationTab, "Bases", true, function(v)
+    AutoBuy.BuyBases = v
+end)
+createCheckbox(AutomationTab, "Trails", true, function(v)
+    AutoBuy.BuyTrails = v
+end)
+createSlider(AutomationTab, "Max Spend per Cycle", 0, 1000000000, 1000000, function(v)
+    AutoBuy.MaxSpend = v
+end)
+
+SectionLabel(AutomationTab, "Auto Sell")
+createToggle(AutomationTab, "Auto Sell", false, function(v)
+    AutoSell:Toggle(v)
+end)
+for _, rarity in ipairs({ "Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic" }) do
+    local r = rarity
+    createCheckbox(AutomationTab, r, true, function(v)
+        AutoSell.Rarities[r] = v
+    end)
+end
+
+SectionLabel(AutomationTab, "Auto Farm")
+createToggle(AutomationTab, "Auto Farm", false, function(v)
+    AutoFarm:Toggle(v)
+end)
+createSlider(AutomationTab, "Minimum Area", 1, 12, 9, function(v)
+    AutoFarm.MinArea = math.floor(v + 0.5)
+end)
+createCheckbox(AutomationTab, "Return to Base", true, function(v)
+    AutoFarm.ReturnToBase = v
+end)
+createSlider(AutomationTab, "Cycle Delay", 1, 20, 5, function(v)
+    AutoFarm.CycleDelay = v
+end)
+
+SectionLabel(AutomationTab, "Auto Redeem Index")
+createToggle(AutomationTab, "Auto Redeem", false, function(v)
+    AutoRedeem:Toggle(v)
+end)
+createSlider(AutomationTab, "Interval", 1, 10, 1, function(v)
+    AutoRedeem.Interval = v
+end)
+
+-- Tab 4: Settings
+SectionLabel(SettingsTab, "Settings")
+createButton(SettingsTab, "Unload Quantum Hub", function()
+    pcall(function()
+        DisconnectAll()
+    end)
+    pcall(function()
+        if InstantInteract.Conn then
+            InstantInteract.Conn:Disconnect()
+        end
+    end)
+    pcall(function()
+        if SpeedBypass.SpeedConn then
+            SpeedBypass.SpeedConn:Disconnect()
+        end
+    end)
+    pcall(function()
+        if Fly.FlyConn then
+            Fly.FlyConn:Disconnect()
+        end
+    end)
+    pcall(function()
+        if Glide.BV then
+            Glide.BV:Destroy()
+        end
+    end)
+    pcall(function()
+        if Fly.BV then
+            Fly.BV:Destroy()
+        end
+    end)
+    pcall(function()
+        AutoBuy.Enabled = false
+        AutoSell.Enabled = false
+        AutoFarm.Enabled = false
+        AutoRedeem.Enabled = false
+        KillAura.Enabled = false
+        SpeedBypass.Enabled = false
+        Glide.Enabled = false
+        Fly.Enabled = false
+    end)
+    pcall(function()
+        Window.Gui:Destroy()
+    end)
+    warn("[Quantum Hub] Unloaded.")
+end)
+
+-- 7. Loops (RunService.Heartbeat, task.spawn polling loops) --------
+
+TrackConnection(RunService.Heartbeat:Connect(function()
+    pcall(function()
+        KillAura:Run()
+    end))
+    pcall(function()
+        Glide:Refresh()
+    end)
+end))
+
+-- AutoBuy loop every 2s
+task.spawn(function()
+    while true do
+        task.wait(2)
+        pcall(function()
+            if AutoBuy.Enabled then
+                AutoBuy:Run()
+            end
+        end)
+    end
+end)
+
+-- AutoSell loop every 1s
+task.spawn(function()
+    while true do
+        task.wait(1)
+        pcall(function()
+            if AutoSell.Enabled then
+                AutoSell:Run()
+            end
+        end)
+    end
+end)
+
+-- Re-apply Glide velocity on respawn / movement drift
+TrackConnection(RunService.Heartbeat:Connect(function()
+    pcall(function()
+        if Glide.Enabled and Glide.BV then
+            local hrp = GetHRP()
+            if hrp and Glide.BV.Parent ~= hrp then
+                Glide.BV.Parent = hrp
+            end
+        end
+        if Fly.Enabled and Fly.BV then
+            local hrp = GetHRP()
+            if hrp and Fly.BV.Parent ~= hrp then
+                Fly.BV.Parent = hrp
+            end
+        end
+    end))
+end))
+
+-- 8. Toast (Library:Notify equivalent) ------------------------------
+Notify = function(text)
+    pcall(function()
+        local gui = Window and Window.Gui
+        if not gui then
+            return
+        end
+        local toast = Instance.new("Frame")
+        toast.Size = UDim2.new(0, 260, 0, 44)
+        toast.Position = UDim2.new(1, -270, 1, -54)
+        toast.BackgroundColor3 = Theme.Panel
+        toast.BorderSizePixel = 0
+        toast.Parent = gui
+        ApplyCorner(toast, 8)
+        ApplyStroke(toast, Theme.Accent, 1)
+
+        local pad = Instance.new("UIPadding")
+        pad.PaddingLeft = UDim.new(0, 10)
+        pad.PaddingRight = UDim.new(0, 10)
+        pad.PaddingTop = UDim.new(0, 6)
+        pad.PaddingBottom = UDim.new(0, 6)
+        pad.Parent = toast
+
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, 0, 1, 0)
+        label.BackgroundTransparency = 1
+        label.Text = tostring(text)
+        label.TextColor3 = Theme.Text
+        label.Font = Enum.Font.Gotham
+        label.TextSize = 12
+        label.TextWrapped = true
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Parent = toast
+
+        task.spawn(function()
+            task.wait(5)
+            pcall(function()
+                local tw = TweenService:Create(toast, TweenInfo.new(0.5), { BackgroundTransparency = 1 })
+                tw:Play()
+                pcall(function()
+                    local tw2 = TweenService:Create(label, TweenInfo.new(0.5), { TextTransparency = 1 })
+                    tw2:Play()
+                end)
+                tw.Completed:Wait()
+                toast:Destroy()
+            end)
+        end)
+    end)
+end
+
+-- 9. Final print -----------------------------------------------------
+print("[Quantum Hub] Loaded.")
