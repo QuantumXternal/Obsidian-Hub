@@ -1042,11 +1042,10 @@ function KillAura:CanUseTool()
             return false
         end
         if self.ToolGameplayGuard then
-            -- Matches friend source (bataura): must be INSIDE the arena to fire.
             local insideOk, inside = pcall(function()
                 return self.ToolGameplayGuard.IsLocalInsideArena()
             end)
-            if insideOk and not inside then
+            if insideOk and inside then
                 return false
             end
         end
@@ -1824,7 +1823,7 @@ local Glide, Blink, Fly, AutoTreadmill, PlaceHatch
 -- egg record schema (AreaId/BoundsCFrame verified from EggState).
 local AutoSteal = {
     Enabled = false,
-    ScanRadius = 5000,
+    ScanRadius = 1500,
     MovementMethod = "Fly", -- Walk / Glide / Blink / Fly
     FilterMode = "Rarity", -- Rarity / Best Value / Weight-Size
     AreaAllow = {}, -- empty = all areas; keys are AreaId strings
@@ -1861,7 +1860,6 @@ local AutoSteal = {
     StealOwnedFly = false,
     SavedWalkSpeed = 16,
     StealDriving = false, -- true while TravelTo owns the character
-    TimedBlacklist = {}, -- {Pos, At}: spots cooling down 60s
 }
 
 function AutoSteal:EnsureData()
@@ -2322,7 +2320,7 @@ function AutoSteal:TravelTo(pos, token)
             end
         end)
         local steps = 0
-        while self.Enabled and token == self.Token and steps < 27 do
+        while self.Enabled and token == self.Token and steps < 40 do
             local hrp = GetHRP()
             if not hrp then
                 break
@@ -2351,7 +2349,7 @@ function AutoSteal:TravelTo(pos, token)
             end
         end)
         local t0 = tick()
-        while self.Enabled and token == self.Token and tick() - t0 < 15 do
+        while self.Enabled and token == self.Token and tick() - t0 < 30 do
             local hrp = GetHRP()
             if not hrp then
                 break
@@ -2395,7 +2393,7 @@ function AutoSteal:TravelTo(pos, token)
         end
     end)
     local t0 = tick()
-    while self.Enabled and token == self.Token and tick() - t0 < 15 do
+    while self.Enabled and token == self.Token and tick() - t0 < 30 do
         local dt = task.wait(0.05)
         local hrp = GetHRP()
         local char = GetCharacter()
@@ -2470,35 +2468,14 @@ function AutoSteal:EggCount()
     return nil
 end
 
--- Snapshot of currently equipped tool names (for new-egg detection).
-function AutoSteal:ToolSet()
-    local set = {}
-    pcall(function()
-        local char = GetCharacter()
-        if char then
-            for _, t in ipairs(char:GetChildren()) do
-                if t:IsA("Tool") then
-                    set[t.Name] = true
-                end
-            end
-        end
-    end)
-    return set
-end
-
--- True only on proof of a NEW egg: a tool that was not equipped before,
--- or the save's egg count grew. Never any-Tool (stale hand lies).
-function AutoSteal:IsHoldingEgg(beforeCount, beforeTools)
+-- True when an egg is in hand right now: tool equipped, or the save
+-- grew since beforeCount. Same Tool pattern as KillAura:CanUseTool.
+function AutoSteal:IsHoldingEgg(beforeCount)
     local held = false
     pcall(function()
         local char = GetCharacter()
-        if char then
-            for _, t in ipairs(char:GetChildren()) do
-                if t:IsA("Tool") and (not beforeTools or not beforeTools[t.Name]) then
-                    held = true
-                    break
-                end
-            end
+        if char and char:FindFirstChildOfClass("Tool") then
+            held = true
         end
     end)
     if not held and beforeCount ~= nil then
@@ -2569,7 +2546,6 @@ function AutoSteal:GrabAt(best, token)
         return "gone"
     end
     local before = self:EggCount()
-    local beforeTools = self:ToolSet()
     task.wait(0.4)
     local prompt = self:GetPrompt(best.Pos)
     if prompt and fireproximityprompt then
@@ -2577,7 +2553,7 @@ function AutoSteal:GrabAt(best, token)
             fireproximityprompt(prompt)
         end)
         task.wait(0.5)
-        if self:IsHoldingEgg(before, beforeTools) then
+        if self:IsHoldingEgg(before) then
             return "held"
         end
         pcall(function()
@@ -2587,7 +2563,7 @@ function AutoSteal:GrabAt(best, token)
             end
         end)
         task.wait(0.5)
-        if self:IsHoldingEgg(before, beforeTools) then
+        if self:IsHoldingEgg(before) then
             return "held"
         end
     else
@@ -2599,35 +2575,16 @@ function AutoSteal:GrabAt(best, token)
     return "gone"
 end
 
--- Fresh matches excluding proven-unstealable spots: per-cycle ignores
--- plus the 60s timed blacklist shared across cycles.
+-- Fresh matches excluding positions already proven unstealable.
 function AutoSteal:PickFresh(ignored)
     local fresh = self:GetMatches()
-    local now = tick()
-    local live = {}
-    for _, ip in ipairs(ignored or {}) do
-        table.insert(live, ip)
-    end
-    for _, entry in ipairs(self.TimedBlacklist) do
-        if now - (entry.At or 0) < 60 then
-            table.insert(live, entry.Pos)
-        end
-    end
-    -- Prune expired entries so the list never grows.
-    local kept = {}
-    for _, entry in ipairs(self.TimedBlacklist) do
-        if now - (entry.At or 0) < 60 then
-            table.insert(kept, entry)
-        end
-    end
-    self.TimedBlacklist = kept
-    if #live == 0 then
+    if not ignored or #ignored == 0 then
         return fresh
     end
     local out = {}
     for _, m in ipairs(fresh) do
         local skip = false
-        for _, ip in ipairs(live) do
+        for _, ip in ipairs(ignored) do
             local ok, close = pcall(function()
                 return (m.Pos - ip).Magnitude <= 10
             end)
@@ -2655,9 +2612,10 @@ function AutoSteal:PickBest(matches)
     return best
 end
 
--- Always Instant Return: grab verified -> straight to base, no waits,
--- no re-engage leg. (Mode/Return/GoBackOut selections removed.)
 function AutoSteal:GoBaseAndDeposit(token, lastPos)
+    if not self.ReturnToBase then
+        return
+    end
     self:TravelTo(BASE_CFRAME.Position, token)
     if not self.Enabled or token ~= self.Token then
         return
@@ -2672,6 +2630,9 @@ function AutoSteal:GoBaseAndDeposit(token, lastPos)
             PlaceHatch:HatchOnce()
         end
     end)
+    if self.GoBackOut and self.Enabled and token == self.Token and lastPos then
+        self:TravelTo(lastPos, token)
+    end
 end
 
 function AutoSteal:StealOnce()
@@ -2679,12 +2640,8 @@ function AutoSteal:StealOnce()
     local ignored = {}
     local matches = self:PickFresh(ignored)
     if #matches == 0 then
-        -- Throttled: one toast per 10s so base-hold doesn't spam.
-        if not self.LastNoMatchToast or tick() - self.LastNoMatchToast > 10 then
-            self.LastNoMatchToast = tick()
-            if Notify then
-                Notify("AutoSteal: no matches")
-            end
+        if Notify then
+            Notify("AutoSteal: no matches")
         end
         -- Nothing to steal: hold base instead of idling in the field.
         if self.ReturnToBase then
@@ -2694,7 +2651,6 @@ function AutoSteal:StealOnce()
     end
     local best = self:PickBest(matches)
     local goneStreak = 0
-    local targetTries = 0
     while self.Enabled and token == self.Token do
         self:TravelTo(best.Pos, token)
         if not self.Enabled or token ~= self.Token then
@@ -2717,33 +2673,9 @@ function AutoSteal:StealOnce()
             return
         end
         if result == "retry" then
-            -- Same egg still stealable: keep trying, but cap attempts per
-            -- target so one ungrappable egg can't wedge the loop forever.
-            -- 6 failed grabs -> 60s timed blacklist -> retarget.
-            targetTries = targetTries + 1
-            if targetTries >= 6 then
-                table.insert(self.TimedBlacklist, { Pos = best.Pos, At = tick() })
-                table.insert(ignored, best.Pos)
-                local fresh = self:PickFresh(ignored)
-                if #fresh > 0 then
-                    best = self:PickBest(fresh)
-                    goneStreak, targetTries = 0, 0
-                    if Notify then
-                        Notify("AutoSteal: spot cooling down, retargeting")
-                    end
-                else
-                    if Notify then
-                        Notify("AutoSteal: target stuck, returning")
-                    end
-                    if self.ReturnToBase then
-                        self:TravelTo(BASE_CFRAME.Position, token)
-                    end
-                    return
-                end
-            else
-                goneStreak = 0
-                task.wait(0.25)
-            end
+            -- Same egg still stealable: re-travel and re-fire until held.
+            goneStreak = 0
+            task.wait(0.25)
         else
             goneStreak = goneStreak + 1
             if goneStreak < 3 then
@@ -2755,7 +2687,7 @@ function AutoSteal:StealOnce()
                 local fresh = self:PickFresh(ignored)
                 if #fresh > 0 then
                     best = self:PickBest(fresh)
-                    goneStreak, targetTries = 0, 0
+                    goneStreak = 0
                     if Notify then
                         Notify("AutoSteal: retargeting " .. tostring(best.Rarity))
                     end
@@ -2788,7 +2720,6 @@ function AutoSteal:Toggle(state)
             return
         end
         -- Boot with retries: game data is often not ready on first enable.
-        -- Both field eggs AND the save (grab detector) must read, or abort.
         local ready = false
         for attempt = 1, 5 do
             self:EnsureData()
@@ -2796,8 +2727,7 @@ function AutoSteal:Toggle(state)
                 local ok, field = pcall(function()
                     return self.EggState.ReadFieldEggs()
                 end)
-                local saveOk = (self:EggCount() ~= nil)
-                if ok and field and field.Records and saveOk then
+                if ok and field and field.Records then
                     ready = true
                     break
                 end
@@ -2805,9 +2735,9 @@ function AutoSteal:Toggle(state)
             task.wait(1)
         end
         if not ready then
-            warn("[Quantum Hub] AutoSteal aborted: egg data or save unreadable")
+            warn("[Quantum Hub] AutoSteal aborted: EggState/field eggs unreadable")
             if Notify then
-                Notify("AutoSteal aborted: no egg/save data")
+                Notify("AutoSteal aborted: no egg data")
             end
             self.Enabled = false
             return
@@ -3276,17 +3206,7 @@ AutoTreadmill = {
     TreadmillCF = nil,
     WasEnabled = false,
     PausedBySteal = false,
-    StandInterval = 1,
-    StatusLabel = nil, -- wired by Treadmill tab UI
 }
-
-local function TreadmillStatus(text)
-    pcall(function()
-        if AutoTreadmill.StatusLabel then
-            AutoTreadmill.StatusLabel.Text = text
-        end
-    end)
-end
 
 function AutoTreadmill:FindTreadmill()
     local ok, res = pcall(function()
@@ -3337,14 +3257,12 @@ function AutoTreadmill:Toggle(state)
         end
         if not self.TreadmillCF then
             warn("[Quantum Hub] AutoTreadmill: pad not found")
-            TreadmillStatus("Pad: not found.")
             if Notify then
                 Notify("Treadmill: pad not found")
             end
             self.Enabled = false
             return
         end
-        TreadmillStatus("Pad: locked, standing.")
         self.Token = self.Token + 1
         local myToken = self.Token
         if Notify then
@@ -3360,12 +3278,11 @@ function AutoTreadmill:Toggle(state)
                         end
                     end
                 end)
-                task.wait(math.clamp(tonumber(self.StandInterval) or 1, 0.5, 5))
+                task.wait(1)
             end
         end)
     else
         self.Token = self.Token + 1
-        TreadmillStatus("Pad: idle.")
     end
 end
 
@@ -3593,36 +3510,13 @@ PlaceHatch = {
     HatchRemotes = { "RF/EggWorld/AskHatch", "RE/EggWorld/HatchEgg", "RF/Hatch/AskHatch" },
 }
 
--- Invoke with a 3s timeout: a hung server yield must never freeze steal.
-local function InvokeTimeout(remote, timeout)
-    local done, result = false, nil
-    task.spawn(function()
-        local ok, res = pcall(function()
-            return remote:InvokeServer()
-        end)
-        result = { ok, res }
-        done = true
-    end)
-    local t0 = tick()
-    while not done and tick() - t0 < (timeout or 3) do
-        task.wait(0.1)
-    end
-    if not done then
-        warn("[Quantum Hub] PlaceHatch invoke timed out")
-        return false
-    end
-    if result and result[1] then
-        return true
-    end
-    return false
-end
-
 function PlaceHatch:TryEach(list, isInvoke)
     for _, path in ipairs(list) do
         local remote = getRemote(path)
         if remote then
             if isInvoke then
-                if InvokeTimeout(remote, 3) then
+                local ok = safeInvoke(remote)
+                if ok then
                     return true
                 end
             else
@@ -3716,8 +3610,8 @@ end
 
 -- Tab 1: Main (Combat)
 SectionLabel(MainTab, "Combat")
-createToggle(MainTab, "Bat Aura", false, function(v)
-    KillAura:Toggle(v)
+createDropdown(MainTab, "Kill Aura Mode", { "Off", "On" }, "Off", function(v)
+    KillAura:Toggle(v == "On")
 end)
 createSlider(MainTab, "Range", 5, 30, 16.5, function(v)
     KillAura.Range = v
@@ -3728,17 +3622,17 @@ end)
 createSlider(MainTab, "Attack Delay", 0.05, 0.5, 0.1, function(v)
     KillAura.AttackDelay = v
 end)
-createToggle(MainTab, "No Knockback", false, function(v)
-    NoKnockback:Toggle(v)
+createDropdown(MainTab, "Knockback Protection", { "Off", "On" }, "Off", function(v)
+    NoKnockback:Toggle(v == "On")
 end)
-createToggle(MainTab, "Instant Interact", false, function(v)
+createToggle(MainTab, "Instant Interact", true, function(v)
     InstantInteract:Toggle(v)
 end)
 
 -- Tab 2: Automation
 SectionLabel(AutomationTab, "Auto Buy")
-createToggle(AutomationTab, "Auto Buy", false, function(v)
-    AutoBuy:Toggle(v)
+createDropdown(AutomationTab, "Auto Buy", { "Off", "On" }, "Off", function(v)
+    AutoBuy:Toggle(v == "On")
 end)
 local buySetters = {}
 createDropdown(AutomationTab, "Buy Set", { "All", "Treadmills Only", "Bases Only", "Trails Only", "Treadmills+Bases", "Treadmills+Trails", "Bases+Trails" }, "All", function(v)
@@ -3789,8 +3683,8 @@ createSlider(AutomationTab, "Buy Interval", 0.1, 2, 0.5, function(v)
 end)
 
 SectionLabel(AutomationTab, "Auto Sell")
-createToggle(AutomationTab, "Auto Sell", false, function(v)
-    AutoSell:Toggle(v)
+createDropdown(AutomationTab, "Auto Sell", { "Off", "On" }, "Off", function(v)
+    AutoSell:Toggle(v == "On")
 end)
 local sellSetters = {}
 local function ApplySellSet(set)
@@ -3822,28 +3716,26 @@ for _, rarity in ipairs({ "Common", "Uncommon", "Rare", "Epic", "Legendary", "My
     sellSetters[r] = setFn
 end
 
-SectionLabel(AutomationTab, "Placing")
-createToggle(AutomationTab, "Auto Place", false, function(v)
-    AutoSteal.PlaceEnabled = v
+SectionLabel(AutomationTab, "Auto Farm")
+createDropdown(AutomationTab, "Auto Farm", { "Off", "On" }, "Off", function(v)
+    AutoFarm:Toggle(v == "On")
 end)
-createButton(AutomationTab, "Place Eggs Now", function()
-    pcall(function()
-        PlaceHatch:PlaceOnce()
-    end)
+createDropdown(AutomationTab, "Farm Area Floor", { "Forest", "Lake", "Desert", "Jungle", "Snow", "Volcano", "Abyss Ocean", "Prehistoric", "Cosmic", "Cherry Blossom", "Titan Temple", "Light Dark" }, "Cherry Blossom", function(v)
+    AutoFarm.MinArea = table.find(AutoFarm.Areas, v) or 1
 end)
-SectionLabel(AutomationTab, "Hatching")
-createToggle(AutomationTab, "Auto Hatch", false, function(v)
-    AutoSteal.HatchEnabled = v
+createDropdown(AutomationTab, "Farm Return", { "Return to Base", "Stay in Field" }, "Return to Base", function(v)
+    AutoFarm.ReturnToBase = (v == "Return to Base")
 end)
-createButton(AutomationTab, "Hatch Now", function()
-    pcall(function()
-        PlaceHatch:HatchOnce()
-    end)
+createSlider(AutomationTab, "Farm Speed", 100, 5000, 1500, function(v)
+    AutoFarm.GoSpeed = v
+end)
+createSlider(AutomationTab, "Cycle Delay", 1, 20, 1.5, function(v)
+    AutoFarm.CycleDelay = v
 end)
 
 SectionLabel(AutomationTab, "Auto Redeem Index")
-createToggle(AutomationTab, "Auto Redeem", false, function(v)
-    AutoRedeem:Toggle(v)
+createDropdown(AutomationTab, "Auto Redeem", { "Off", "On" }, "Off", function(v)
+    AutoRedeem:Toggle(v == "On")
 end)
 createDropdown(AutomationTab, "Redeem Interval", { "1s Turbo", "2s Safe", "5s Slow" }, "1s Turbo", function(v)
     if v == "2s Safe" then
@@ -3857,8 +3749,14 @@ end)
 
 -- Tab 3: Steal (Auto Steal)
 SectionLabel(StealTab, "Auto Steal")
-local _, stealSet = createToggle(StealTab, "Auto Steal", false, function(v)
-    AutoSteal:Toggle(v)
+createDropdown(StealTab, "Auto Steal", { "Off", "Instant Return to Base", "Return + Re-engage", "Stay (no return)" }, "Off", function(v)
+    if v == "Off" then
+        AutoSteal:Toggle(false)
+    else
+        AutoSteal.ReturnToBase = (v ~= "Stay (no return)")
+        AutoSteal.GoBackOut = (v == "Return + Re-engage")
+        AutoSteal:Toggle(true)
+    end
 end)
 createDropdown(StealTab, "Pickup Mode", { "Instant (Hold=0)", "Normal" }, "Instant (Hold=0)", function(v)
     InstantInteract:Toggle(v == "Instant (Hold=0)")
@@ -3880,16 +3778,15 @@ createButton(StealTab, "Steal Now (one grab)", function()
     end)
 end)
 createButton(StealTab, "Stop Current Steal", function()
-    -- Full halt (not a token bump): stops loop, movement, farm/treadmill
-    -- resume, and syncs the toggle UI so nothing looks ON while dead.
-    AutoSteal:Toggle(false)
-    pcall(stealSet, false)
+    AutoSteal.Token = AutoSteal.Token + 1
+    AutoSteal:StopMovement()
     if Notify then
         Notify("Steal stopped")
     end
 end)
--- Safe Boot: nothing enables itself. Instant pickup stays OFF until you
--- pick it (Steal Pickup dropdown or the Main toggle below).
+pcall(function()
+    InstantInteract:Toggle(true)
+end)
 -- Forward declarations: visibility updaters are defined after the panels.
 local UpdateStealVisibility, UpdateMovementBox
 createDropdown(StealTab, "Steal On", { "Rarity", "Best Value", "Weight-Size" }, "Rarity", function(v)
@@ -3898,11 +3795,33 @@ createDropdown(StealTab, "Steal On", { "Rarity", "Best Value", "Weight-Size" }, 
         UpdateStealVisibility()
     end
 end)
-createSlider(StealTab, "Scan Radius", 50, 10000, 5000, function(v)
+createSlider(StealTab, "Scan Radius", 50, 10000, 1500, function(v)
     AutoSteal.ScanRadius = v
 end)
 createSlider(StealTab, "Cycle Delay", 0.5, 10, 1.5, function(v)
     AutoSteal.CycleDelay = v
+end)
+createCheckbox(StealTab, "Return to Base", true, function(v)
+    AutoSteal.ReturnToBase = v
+end)
+createCheckbox(StealTab, "Go Back Out", true, function(v)
+    AutoSteal.GoBackOut = v
+end)
+createCheckbox(StealTab, "Auto Place (after base)", false, function(v)
+    AutoSteal.PlaceEnabled = v
+end)
+createCheckbox(StealTab, "Auto Hatch (when ready)", false, function(v)
+    AutoSteal.HatchEnabled = v
+end)
+createButton(StealTab, "Place Eggs Now", function()
+    pcall(function()
+        PlaceHatch:PlaceOnce()
+    end)
+end)
+createButton(StealTab, "Hatch Now", function()
+    pcall(function()
+        PlaceHatch:HatchOnce()
+    end)
 end)
 
 SectionLabel(StealTab, "Area (empty = all areas)")
@@ -4275,50 +4194,28 @@ AutoSteal.PreviewLabel = previewLabel
 createButton(StealTab, "Refresh Preview", function()
     AutoSteal:RefreshPreview()
 end)
--- Safe Boot: no game reads at load. Boxes render EmptyNote until you
--- press Refresh Filters (or enable Auto Steal, which discovers).
 pcall(function()
-    RebuildStealFilters()
+    AutoSteal:DiscoverFilters()
+end)
+RebuildStealFilters()
+pcall(function()
+    AutoSteal:RefreshPreview()
 end)
 
 -- Tab 4: Treadmill (Auto Treadmill)
 SectionLabel(TreadmillTab, "Auto Treadmill")
-createToggle(TreadmillTab, "Auto Treadmill", false, function(v)
-    AutoTreadmill:Toggle(v)
+createDropdown(TreadmillTab, "Auto Treadmill", { "Off", "On" }, "Off", function(v)
+    AutoTreadmill:Toggle(v == "On")
 end)
-createSlider(TreadmillTab, "Stand Check", 0.5, 5, 1, function(v)
-    AutoTreadmill.StandInterval = v
-end)
-local treadmillStatus = Instance.new("TextLabel")
-treadmillStatus.Name = "TreadmillStatus"
-treadmillStatus.Size = UDim2.new(1, 0, 0, 28)
-treadmillStatus.BackgroundTransparency = 1
-treadmillStatus.Text = "Pad: not locked — press Find."
-treadmillStatus.TextColor3 = Theme.TextDim
-treadmillStatus.Font = Enum.Font.Gotham
-treadmillStatus.TextSize = 13
-treadmillStatus.TextXAlignment = Enum.TextXAlignment.Left
-treadmillStatus.Parent = TreadmillTab
-AutoTreadmill.StatusLabel = treadmillStatus
 createButton(TreadmillTab, "Find Treadmill Pad", function()
     local cf = AutoTreadmill:FindTreadmill()
     if cf then
         AutoTreadmill.TreadmillCF = cf
-        pcall(function()
-            if AutoTreadmill.StatusLabel then
-                AutoTreadmill.StatusLabel.Text = "Pad: locked, ready."
-            end
-        end)
         if Notify then
             Notify("Treadmill pad locked")
         end
     else
         warn("[Quantum Hub] Treadmill pad not found")
-        pcall(function()
-            if AutoTreadmill.StatusLabel then
-                AutoTreadmill.StatusLabel.Text = "Pad: not found."
-            end
-        end)
         if Notify then
             Notify("Treadmill pad not found")
         end
@@ -4327,12 +4224,15 @@ end)
 
 -- Tab 5: Misc
 SectionLabel(MiscTab, "Session")
-createToggle(MiscTab, "Anti AFK", false, function(v)
-    AntiAFK:Toggle(v)
+createDropdown(MiscTab, "Anti AFK", { "Off", "On" }, "On", function(v)
+    AntiAFK:Toggle(v == "On")
+end)
+pcall(function()
+    AntiAFK:Toggle(true)
 end)
 SectionLabel(MiscTab, "Protection")
-createToggle(MiscTab, "Anti-Trap", false, function(v)
-    AntiTrap:Toggle(v)
+createDropdown(MiscTab, "Anti-Trap", { "Off", "On" }, "Off", function(v)
+    AntiTrap:Toggle(v == "On")
 end)
 SectionLabel(MiscTab, "Client Graphics (reversible)")
 createDropdown(MiscTab, "Graphics", { "Normal", "Low", "Ultra Low" }, "Normal", function(v)
@@ -4428,17 +4328,11 @@ task.spawn(function()
     end
 end)
 
--- Secret / Eternal / Divine field notifier (edge-triggered). Starts
--- reading only once Auto Steal has been enabled at least once.
+-- Secret / Eternal / Divine field notifier every 1.5s (edge-triggered).
 task.spawn(function()
     local lastCount = 0
-    local wasArmed = false
     while true do
         task.wait(1.5)
-        if not AutoSteal.Enabled and not wasArmed then
-            continue
-        end
-        wasArmed = true
         pcall(function()
             AutoSteal:EnsureData()
             if not AutoSteal.EggState then
