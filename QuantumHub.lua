@@ -137,6 +137,24 @@ local function MakeDraggable(main, handle)
     pcall(function()
         handle.InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                -- Ignore presses that begin on child buttons/boxes so taps
+                -- on close/min (touch or mouse) never start a drag.
+                local pos = input.Position
+                local onControl = false
+                pcall(function()
+                    for _, d in ipairs(handle:GetDescendants()) do
+                        if d:IsA("TextButton") or d:IsA("TextBox") then
+                            local ap, as = d.AbsolutePosition, d.AbsoluteSize
+                            if pos.X >= ap.X and pos.X <= ap.X + as.X and pos.Y >= ap.Y and pos.Y <= ap.Y + as.Y then
+                                onControl = true
+                                break
+                            end
+                        end
+                    end
+                end)
+                if onControl then
+                    return
+                end
                 dragging = true
                 dragStart = input.Position
                 startPos = main.Position
@@ -214,13 +232,24 @@ local function ApplyStroke(obj, color, thickness)
     return s
 end
 
+-- Registry of open dropdown overlay lists so opening one (or minimizing
+-- the window) closes the rest. Entries are setVisible closures; all calls
+-- are pcall-wrapped because the owning GUI may be destroyed (Unload).
+local OpenDropdowns = {}
+
+local function CloseAllDropdowns()
+    for _, fn in ipairs(OpenDropdowns) do
+        pcall(fn, false)
+    end
+end
+
 -- 4. UI helper builders (Instance.new only) ---------------------
 
 local function styleButton(btn, accent)
     btn.BackgroundColor3 = accent and Theme.Accent or Theme.Panel
     btn.TextColor3 = Theme.ButtonText
     btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 13
+    btn.TextSize = 14
     btn.AutoButtonColor = true
     btn.BorderSizePixel = 0
     ApplyCorner(btn, 8)
@@ -292,6 +321,28 @@ local function createWindow()
     ApplyCorner(main, 8)
     ApplyStroke(main, Theme.Outline, 1)
 
+    -- Responsive scale for small viewports (phones): shrink the whole
+    -- window to fit instead of clipping off-screen.
+    local uiScale = Instance.new("UIScale")
+    uiScale.Parent = main
+    local function fitScale()
+        pcall(function()
+            local cam = Workspace.CurrentCamera
+            if not cam then
+                return
+            end
+            local vs = cam.ViewportSize
+            uiScale.Scale = math.clamp(math.min(vs.X / 640, vs.Y / 460), 0.55, 1)
+        end)
+    end
+    fitScale()
+    pcall(function()
+        local cam = Workspace.CurrentCamera
+        if cam then
+            TrackConnection(cam:GetPropertyChangedSignal("ViewportSize"):Connect(fitScale))
+        end
+    end)
+
     local topBar = Instance.new("Frame")
     topBar.Name = "TopBar"
     topBar.Size = UDim2.new(1, 0, 0, 36)
@@ -309,23 +360,25 @@ local function createWindow()
     title.Text = "Quantum Hub"
     title.TextColor3 = Theme.Text
     title.Font = Enum.Font.GothamBold
-    title.TextSize = 15
+    title.TextSize = 16
     title.TextXAlignment = Enum.TextXAlignment.Left
     title.Parent = topBar
 
     local minBtn = Instance.new("TextButton")
     minBtn.Name = "Minimize"
-    minBtn.Size = UDim2.new(0, 30, 0, 24)
-    minBtn.Position = UDim2.new(1, -70, 0.5, -12)
+    minBtn.Size = UDim2.new(0, 36, 0, 28)
+    minBtn.Position = UDim2.new(1, -80, 0.5, -14)
     minBtn.Text = "_"
+    minBtn.TextSize = 16
     styleButton(minBtn, false)
     minBtn.Parent = topBar
 
     local closeBtn = Instance.new("TextButton")
     closeBtn.Name = "Close"
-    closeBtn.Size = UDim2.new(0, 30, 0, 24)
-    closeBtn.Position = UDim2.new(1, -36, 0.5, -12)
+    closeBtn.Size = UDim2.new(0, 36, 0, 28)
+    closeBtn.Position = UDim2.new(1, -40, 0.5, -14)
     closeBtn.Text = "X"
+    closeBtn.TextSize = 14
     styleButton(closeBtn, true)
     closeBtn.Parent = topBar
 
@@ -374,6 +427,7 @@ local function createWindow()
     local minimized = false
     minBtn.MouseButton1Click:Connect(function()
         minimized = not minimized
+        CloseAllDropdowns()
         body.Visible = not minimized
         if minimized then
             main.Size = UDim2.new(0, 520, 0, 36)
@@ -464,7 +518,7 @@ end
 local function createToggle(parent, name, default, callback)
     local frame = Instance.new("Frame")
     frame.Name = name .. "Toggle"
-    frame.Size = UDim2.new(1, 0, 0, 32)
+    frame.Size = UDim2.new(1, 0, 0, 40)
     frame.BackgroundColor3 = Theme.Panel
     frame.BorderSizePixel = 0
     frame.Parent = parent
@@ -472,25 +526,25 @@ local function createToggle(parent, name, default, callback)
     ApplyStroke(frame, Theme.Outline, 1)
 
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -80, 1, 0)
+    label.Size = UDim2.new(1, -84, 1, 0)
     label.Position = UDim2.new(0, 10, 0, 0)
     label.BackgroundTransparency = 1
     label.Text = name
     label.TextColor3 = Theme.Text
     label.Font = Enum.Font.Gotham
-    label.TextSize = 13
+    label.TextSize = 14
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.Parent = frame
 
     local state = default and true or false
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 56, 0, 22)
-    btn.Position = UDim2.new(1, -64, 0.5, -11)
+    btn.Size = UDim2.new(0, 64, 0, 28)
+    btn.Position = UDim2.new(1, -72, 0.5, -14)
     btn.Text = state and "ON" or "OFF"
     btn.BackgroundColor3 = state and Theme.Accent or Theme.Background
     btn.TextColor3 = Theme.ButtonText
     btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 12
+    btn.TextSize = 13
     btn.BorderSizePixel = 0
     btn.Parent = frame
     ApplyCorner(btn, 8)
@@ -519,13 +573,13 @@ end
 local function createCheckbox(parent, name, default, callback)
     local frame = Instance.new("Frame")
     frame.Name = name .. "Checkbox"
-    frame.Size = UDim2.new(1, 0, 0, 28)
+    frame.Size = UDim2.new(1, 0, 0, 34)
     frame.BackgroundTransparency = 1
     frame.Parent = parent
 
     local box = Instance.new("TextButton")
-    box.Size = UDim2.new(0, 20, 0, 20)
-    box.Position = UDim2.new(0, 2, 0.5, -10)
+    box.Size = UDim2.new(0, 26, 0, 26)
+    box.Position = UDim2.new(0, 2, 0.5, -13)
     box.Text = ""
     box.BackgroundColor3 = Theme.Panel
     box.BorderSizePixel = 0
@@ -539,17 +593,17 @@ local function createCheckbox(parent, name, default, callback)
     check.Text = default and "X" or ""
     check.TextColor3 = Theme.Accent
     check.Font = Enum.Font.GothamBold
-    check.TextSize = 14
+    check.TextSize = 16
     check.Parent = box
 
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -32, 1, 0)
-    label.Position = UDim2.new(0, 28, 0, 0)
+    label.Size = UDim2.new(1, -40, 1, 0)
+    label.Position = UDim2.new(0, 34, 0, 0)
     label.BackgroundTransparency = 1
     label.Text = name
     label.TextColor3 = Theme.TextDim
     label.Font = Enum.Font.Gotham
-    label.TextSize = 13
+    label.TextSize = 14
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.Parent = frame
 
@@ -575,7 +629,7 @@ end
 local function createSlider(parent, name, min, max, default, callback)
     local frame = Instance.new("Frame")
     frame.Name = name .. "Slider"
-    frame.Size = UDim2.new(1, 0, 0, 54)
+    frame.Size = UDim2.new(1, 0, 0, 64)
     frame.BackgroundColor3 = Theme.Panel
     frame.BorderSizePixel = 0
     frame.Parent = parent
@@ -600,7 +654,7 @@ local function createSlider(parent, name, min, max, default, callback)
     label.Text = name
     label.TextColor3 = Theme.Text
     label.Font = Enum.Font.Gotham
-    label.TextSize = 13
+    label.TextSize = 14
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.Parent = topRow
 
@@ -612,14 +666,14 @@ local function createSlider(parent, name, min, max, default, callback)
     valueLabel.Text = tostring(default)
     valueLabel.TextColor3 = Theme.TextDim
     valueLabel.Font = Enum.Font.Gotham
-    valueLabel.TextSize = 12
+    valueLabel.TextSize = 13
     valueLabel.TextXAlignment = Enum.TextXAlignment.Right
     valueLabel.Parent = topRow
 
     local bar = Instance.new("TextButton")
     bar.Name = "Bar"
-    bar.Size = UDim2.new(1, 0, 0, 10)
-    bar.Position = UDim2.new(0, 0, 0, 24)
+    bar.Size = UDim2.new(1, 0, 0, 14)
+    bar.Position = UDim2.new(0, 0, 0, 26)
     bar.Text = ""
     bar.BackgroundColor3 = Theme.Background
     bar.BorderSizePixel = 0
@@ -702,7 +756,7 @@ end
 local function createDropdown(parent, name, options, default, callback)
     local frame = Instance.new("Frame")
     frame.Name = name .. "Dropdown"
-    frame.Size = UDim2.new(1, 0, 0, 32)
+    frame.Size = UDim2.new(1, 0, 0, 40)
     frame.BackgroundColor3 = Theme.Panel
     frame.BorderSizePixel = 0
     frame.Parent = parent
@@ -716,29 +770,46 @@ local function createDropdown(parent, name, options, default, callback)
     label.Text = name
     label.TextColor3 = Theme.Text
     label.Font = Enum.Font.Gotham
-    label.TextSize = 13
+    label.TextSize = 14
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.Parent = frame
 
     local current = default
     local mainBtn = Instance.new("TextButton")
-    mainBtn.Size = UDim2.new(0.5, -10, 0, 22)
-    mainBtn.Position = UDim2.new(0.5, 0, 0.5, -11)
+    mainBtn.Size = UDim2.new(0.5, -10, 0, 28)
+    mainBtn.Position = UDim2.new(0.5, 0, 0.5, -14)
     mainBtn.Text = tostring(default) .. " v"
     styleButton(mainBtn, true)
     mainBtn.Parent = frame
 
+    -- The option list lives on the ScreenGui itself (found by walking up),
+    -- NOT inside the row frame: ScrollingFrame clipping + sibling ZIndex
+    -- is what hid the choices. As a top-level overlay it always renders.
+    local rootGui = nil
+    pcall(function()
+        local node = parent
+        while node do
+            if node:IsA("ScreenGui") then
+                rootGui = node
+                break
+            end
+            node = node.Parent
+        end
+    end)
+    if not rootGui then
+        rootGui = parent
+    end
+
     local list = Instance.new("Frame")
-    list.Name = "Options"
-    list.Size = UDim2.new(1, 0, 0, #options * 26 + 8)
-    list.Position = UDim2.new(0, 0, 1, 4)
+    list.Name = name .. "Options"
+    list.Size = UDim2.new(0, 180, 0, #options * 32 + 8)
     list.BackgroundColor3 = Theme.Background
     list.BorderSizePixel = 0
     list.Visible = false
-    list.ZIndex = 50
-    list.Parent = frame
+    list.ZIndex = 200
+    list.Parent = rootGui
     ApplyCorner(list, 8)
-    ApplyStroke(list, Theme.Outline, 1)
+    ApplyStroke(list, Theme.Accent, 1)
 
     local listLayout = Instance.new("UIListLayout")
     listLayout.Padding = UDim.new(0, 2)
@@ -752,11 +823,28 @@ local function createDropdown(parent, name, options, default, callback)
     listPad.PaddingRight = UDim.new(0, 4)
     listPad.Parent = list
 
+    local function setVisible(v)
+        local ok = pcall(function()
+            if v then
+                local ap = mainBtn.AbsolutePosition
+                local as = mainBtn.AbsoluteSize
+                list.Position = UDim2.fromOffset(ap.X, ap.Y + as.Y + 4)
+                list.Size = UDim2.fromOffset(math.max(as.X + 60, 170), #options * 32 + 8)
+            end
+            list.Visible = v
+        end)
+        if not ok then
+            pcall(function()
+                list.Visible = false
+            end)
+        end
+    end
+    table.insert(OpenDropdowns, setVisible)
+
     local function set(v)
         current = v
         mainBtn.Text = tostring(v) .. " v"
-        list.Visible = false
-        frame.Size = UDim2.new(1, 0, 0, 32)
+        setVisible(false)
         if callback then
             local ok, err = pcall(callback, v)
             if not ok then
@@ -767,10 +855,11 @@ local function createDropdown(parent, name, options, default, callback)
 
     for i, opt in ipairs(options) do
         local ob = Instance.new("TextButton")
-        ob.Size = UDim2.new(1, 0, 0, 24)
+        ob.Size = UDim2.new(1, 0, 0, 30)
         ob.LayoutOrder = i
         ob.Text = tostring(opt)
-        ob.ZIndex = 51
+        ob.TextSize = 14
+        ob.ZIndex = 201
         styleButton(ob, false)
         ob.Parent = list
         ob.MouseButton1Click:Connect(function()
@@ -779,12 +868,9 @@ local function createDropdown(parent, name, options, default, callback)
     end
 
     mainBtn.MouseButton1Click:Connect(function()
-        list.Visible = not list.Visible
-        if list.Visible then
-            frame.Size = UDim2.new(1, 0, 0, 32 + #options * 26 + 12)
-        else
-            frame.Size = UDim2.new(1, 0, 0, 32)
-        end
+        local was = list.Visible
+        CloseAllDropdowns()
+        setVisible(not was)
     end)
 
     return frame, set
@@ -793,7 +879,7 @@ end
 local function createButton(parent, name, callback)
     local btn = Instance.new("TextButton")
     btn.Name = name .. "Button"
-    btn.Size = UDim2.new(1, 0, 0, 32)
+    btn.Size = UDim2.new(1, 0, 0, 40)
     btn.Text = name
     styleButton(btn, true)
     btn.Parent = parent
@@ -817,7 +903,7 @@ end
 local function createTextbox(parent, name, default, callback)
     local frame = Instance.new("Frame")
     frame.Name = name .. "Textbox"
-    frame.Size = UDim2.new(1, 0, 0, 32)
+    frame.Size = UDim2.new(1, 0, 0, 40)
     frame.BackgroundColor3 = Theme.Panel
     frame.BorderSizePixel = 0
     frame.Parent = parent
@@ -836,15 +922,15 @@ local function createTextbox(parent, name, default, callback)
     label.Parent = frame
 
     local box = Instance.new("TextBox")
-    box.Size = UDim2.new(0.55, -10, 0, 22)
-    box.Position = UDim2.new(0.45, 0, 0.5, -11)
+    box.Size = UDim2.new(0.55, -10, 0, 28)
+    box.Position = UDim2.new(0.45, 0, 0.5, -14)
     box.Text = tostring(default)
     box.PlaceholderText = tostring(default)
     box.BackgroundColor3 = Theme.Background
     box.TextColor3 = Theme.Text
     box.PlaceholderColor3 = Theme.TextDim
     box.Font = Enum.Font.Gotham
-    box.TextSize = 12
+    box.TextSize = 13
     box.ClearTextOnFocus = false
     box.BorderSizePixel = 0
     box.Parent = frame
@@ -865,12 +951,12 @@ end
 
 local function SectionLabel(parent, text)
     local l = Instance.new("TextLabel")
-    l.Size = UDim2.new(1, 0, 0, 20)
+    l.Size = UDim2.new(1, 0, 0, 24)
     l.BackgroundTransparency = 1
     l.Text = text
     l.TextColor3 = Theme.Accent
     l.Font = Enum.Font.GothamBold
-    l.TextSize = 13
+    l.TextSize = 14
     l.TextXAlignment = Enum.TextXAlignment.Left
     l.Parent = parent
     return l
@@ -966,6 +1052,8 @@ function KillAura:GetTarget()
         local best = nil
         local bestDist = math.huge
         local bestHealth = math.huge
+        local bestMaxHealth = -math.huge
+        local bestMax = nil
         local candidates = {}
         for _, p in ipairs(Players:GetPlayers()) do
             if p == LocalPlayer then
@@ -993,6 +1081,13 @@ function KillAura:GetTarget()
                         bestHealth = hp
                         best = p
                     end
+                elseif self.Priority == "Highest Health" then
+                    local hum = char:FindFirstChildOfClass("Humanoid")
+                    local hp = hum and hum.Health or -math.huge
+                    if hp > bestMaxHealth then
+                        bestMaxHealth = hp
+                        bestMax = p
+                    end
                 elseif self.Priority == "Random" then
                     table.insert(candidates, p)
                 else
@@ -1005,6 +1100,9 @@ function KillAura:GetTarget()
         end
         if self.Priority == "Random" and #candidates > 0 then
             return candidates[math.random(1, #candidates)]
+        end
+        if self.Priority == "Highest Health" then
+            return bestMax
         end
         return best
     end)
@@ -1674,6 +1772,619 @@ function AutoRedeem:Toggle(state)
     end
 end
 
+-- Forward declarations: AutoSteal travel reuses these movement modules,
+-- which are defined below. (Luau locals must be declared before use.)
+local Glide, Blink, Fly
+
+-- AutoSteal -------------------------------------------------------
+-- TODO: adjust the candidate field names below to this game's exact
+-- egg record schema (AreaId/BoundsCFrame verified from EggState).
+local AutoSteal = {
+    Enabled = false,
+    ScanRadius = 300,
+    MovementMethod = "Walk", -- Walk / Glide / Blink / Fly
+    ReturnToBase = true,
+    GoBackOut = true,
+    MoveSpeed = 60,
+    BlinkDistance = 20,
+    CycleDelay = 5,
+    MinValue = 0,
+    MaxValue = 1000000000,
+    BestValueOnly = false,
+    MinWeight = 0,
+    MaxWeight = 1000000,
+    RarityAllow = {}, -- empty = allow all; TODO: adjust names via DiscoverFilters
+    MutationAllow = {}, -- empty = allow all; TODO: adjust names via DiscoverFilters
+    DiscoveredRarities = {},
+    DiscoveredMutations = {},
+    EggState = nil,
+    Save = nil,
+    Assets = nil,
+    Token = 0,
+    LastMatches = {},
+    PreviewLabel = nil, -- wired by UI construction
+    StealOwnedGlide = false,
+    StealOwnedFly = false,
+    SavedWalkSpeed = 16,
+}
+
+function AutoSteal:EnsureData()
+    if not self.EggState then
+        pcall(function()
+            local client = ReplicatedStorage:FindFirstChild("Client")
+            if client then
+                local m = client:FindFirstChild("EggState")
+                if m then
+                    self.EggState = require(m)
+                end
+            end
+        end)
+    end
+    if not self.Save then
+        pcall(function()
+            local shared = ReplicatedStorage:FindFirstChild("Shared")
+            if shared then
+                local m = shared:FindFirstChild("Save")
+                if m then
+                    self.Save = require(m)
+                end
+            end
+        end)
+    end
+    if not self.Assets then
+        pcall(function()
+            local data = ReplicatedStorage:FindFirstChild("Data")
+            if data then
+                local m = data:FindFirstChild("Assets")
+                if m then
+                    self.Assets = require(m)
+                end
+            end
+        end)
+    end
+end
+
+-- Collect real rarity/mutation names from game data so filters never
+-- hardcode wrong names. TODO: adjust containers if this game stores
+-- mutations elsewhere.
+function AutoSteal:DiscoverFilters()
+    self:EnsureData()
+    pcall(function()
+        local rar = {}
+        if self.Assets and self.Assets.Directory then
+            for _, entry in pairs(self.Assets.Directory) do
+                local ok, name = pcall(function()
+                    return entry.Rarity.DisplayName or entry.Rarity.Name
+                end)
+                if ok and name and not table.find(rar, tostring(name)) then
+                    table.insert(rar, tostring(name))
+                end
+            end
+        end
+        if #rar == 0 and self.EggState then
+            local ok, field = pcall(function()
+                return self.EggState.ReadFieldEggs()
+            end)
+            if ok and field and field.Records then
+                for _, egg in pairs(field.Records) do
+                    local name = self:ResolveRarity(egg)
+                    if name and not table.find(rar, name) then
+                        table.insert(rar, name)
+                    end
+                end
+            end
+        end
+        table.sort(rar)
+        self.DiscoveredRarities = rar
+    end)
+    pcall(function()
+        local muts = {}
+        if self.Assets then
+            for _, key in ipairs({ "Mutations", "MutationList", "MutationDirectory" }) do
+                local t = self.Assets[key]
+                if typeof(t) == "table" then
+                    for _, m in pairs(t) do
+                        local n = nil
+                        pcall(function()
+                            if typeof(m) == "string" then
+                                n = m
+                            elseif typeof(m) == "table" then
+                                n = m.DisplayName or m.Name
+                            end
+                        end)
+                        if n and not table.find(muts, tostring(n)) then
+                            table.insert(muts, tostring(n))
+                        end
+                    end
+                end
+            end
+        end
+        if #muts == 0 and self.EggState then
+            local ok, field = pcall(function()
+                return self.EggState.ReadFieldEggs()
+            end)
+            if ok and field and field.Records then
+                for _, egg in pairs(field.Records) do
+                    local name = self:ResolveMutation(egg)
+                    if name and not table.find(muts, name) then
+                        table.insert(muts, name)
+                    end
+                end
+            end
+        end
+        table.sort(muts)
+        self.DiscoveredMutations = muts
+    end)
+end
+
+function AutoSteal:ResolveRarity(egg)
+    local ok, res = pcall(function()
+        if not self.Assets or not self.Assets.Directory then
+            return nil
+        end
+        local entry = self.Assets.Directory[egg.AssetCategory]
+        if not entry then
+            return nil
+        end
+        return entry.Rarity.DisplayName or entry.Rarity.Name
+    end)
+    if ok and res then
+        return tostring(res)
+    end
+    return nil
+end
+
+-- TODO: adjust candidate fields to this game's egg mutation schema.
+function AutoSteal:ResolveMutation(egg)
+    local ok, res = pcall(function()
+        if typeof(egg) ~= "table" then
+            return nil
+        end
+        local raw = egg.Mutation or egg.MutationId or egg.MutationName
+        if raw == nil then
+            return nil
+        end
+        if typeof(raw) == "string" then
+            return raw
+        end
+        if self.Assets then
+            for _, key in ipairs({ "Mutations", "MutationList", "MutationDirectory" }) do
+                local t = self.Assets[key]
+                if typeof(t) == "table" then
+                    local e = t[raw] or t[tostring(raw)]
+                    if e ~= nil then
+                        if typeof(e) == "string" then
+                            return e
+                        end
+                        if typeof(e) == "table" then
+                            return e.DisplayName or e.Name
+                        end
+                    end
+                end
+            end
+        end
+        return tostring(raw)
+    end)
+    if ok and res then
+        return tostring(res)
+    end
+    return nil
+end
+
+-- TODO: adjust candidate fields to this game's egg weight/size schema.
+function AutoSteal:ResolveWeight(egg)
+    local ok, res = pcall(function()
+        if typeof(egg) ~= "table" then
+            return nil
+        end
+        return tonumber(egg.Weight or egg.Size or egg.Mass or egg.Scale)
+    end)
+    if ok then
+        return res
+    end
+    return nil
+end
+
+-- TODO: adjust candidate fields to this game's egg value schema.
+function AutoSteal:ResolveValue(egg)
+    local ok, res = pcall(function()
+        if typeof(egg) ~= "table" then
+            return nil
+        end
+        local v = tonumber(egg.Value or egg.Cost or egg.Price)
+        if v then
+            return v
+        end
+        if self.Assets and self.Assets.Directory and egg.AssetCategory then
+            local entry = self.Assets.Directory[egg.AssetCategory]
+            if entry then
+                return tonumber(entry.Value or entry.Cost or entry.Price)
+            end
+        end
+        return nil
+    end)
+    if ok then
+        return res
+    end
+    return nil
+end
+
+function AutoSteal:GetEggPos(egg)
+    local ok, res = pcall(function()
+        if typeof(egg) == "table" and egg.BoundsCFrame then
+            local bc = egg.BoundsCFrame
+            if typeof(bc) == "CFrame" then
+                return bc.Position
+            end
+        elseif typeof(egg) == "CFrame" then
+            return egg.Position
+        end
+        return nil
+    end)
+    if ok then
+        return res
+    end
+    return nil
+end
+
+function AutoSteal:PassesFilters(egg)
+    local ok, res = pcall(function()
+        local rarity = self:ResolveRarity(egg)
+        if next(self.RarityAllow) ~= nil then
+            -- Unresolvable rarity passes so schema drift can't hide everything.
+            -- TODO: adjust to reject here if strict filtering is wanted.
+            if rarity ~= nil and self.RarityAllow[rarity] ~= true then
+                return false
+            end
+        end
+        local mut = self:ResolveMutation(egg)
+        if next(self.MutationAllow) ~= nil then
+            if mut ~= nil and self.MutationAllow[mut] ~= true then
+                return false
+            end
+        end
+        local w = self:ResolveWeight(egg)
+        if w ~= nil then
+            if w < (self.MinWeight or 0) or w > (self.MaxWeight or math.huge) then
+                return false
+            end
+        end
+        local v = self:ResolveValue(egg) or 0
+        if v < (self.MinValue or 0) or v > (self.MaxValue or math.huge) then
+            return false
+        end
+        return true
+    end)
+    if ok then
+        return res
+    end
+    return false
+end
+
+function AutoSteal:GetMatches()
+    local out = {}
+    pcall(function()
+        if not self.EggState then
+            return
+        end
+        local hrp = GetHRP()
+        if not hrp then
+            return
+        end
+        local ok, field = pcall(function()
+            return self.EggState.ReadFieldEggs()
+        end)
+        if not ok or not field or not field.Records then
+            return
+        end
+        local origin = hrp.Position
+        for _, egg in pairs(field.Records) do
+            local pos = self:GetEggPos(egg)
+            if pos then
+                local dist = (pos - origin).Magnitude
+                if dist <= (self.ScanRadius or 300) and self:PassesFilters(egg) then
+                    local area = "?"
+                    pcall(function()
+                        if typeof(egg) == "table" and egg.AreaId ~= nil then
+                            area = tostring(egg.AreaId)
+                        end
+                    end)
+                    table.insert(out, {
+                        Egg = egg,
+                        Pos = pos,
+                        Dist = dist,
+                        Area = area,
+                        Rarity = self:ResolveRarity(egg) or "?",
+                        Mutation = self:ResolveMutation(egg) or "-",
+                        Weight = self:ResolveWeight(egg),
+                        Value = self:ResolveValue(egg) or 0,
+                    })
+                end
+            end
+        end
+        table.sort(out, function(a, b)
+            if a.Value ~= b.Value then
+                return a.Value > b.Value
+            end
+            return a.Dist < b.Dist
+        end)
+    end)
+    self.LastMatches = out
+    self:UpdatePreview(out)
+    return out
+end
+
+function AutoSteal:UpdatePreview(matches)
+    pcall(function()
+        local label = self.PreviewLabel
+        if not label then
+            return
+        end
+        matches = matches or self.LastMatches or {}
+        if #matches == 0 then
+            label.Text = "No eggs match the current filters."
+            return
+        end
+        local lines = {}
+        for i = 1, math.min(#matches, 8) do
+            local m = matches[i]
+            table.insert(lines, string.format("%d. %s | %s | %s | %s", i, tostring(m.Area), tostring(m.Rarity), tostring(m.Mutation), tostring(m.Value)))
+        end
+        if #matches > 8 then
+            table.insert(lines, "+" .. tostring(#matches - 8) .. " more")
+        end
+        label.Text = table.concat(lines, "\n")
+    end)
+end
+
+function AutoSteal:RefreshPreview()
+    self:EnsureData()
+    local matches = self:GetMatches()
+    if Notify then
+        Notify("AutoSteal: " .. tostring(#matches) .. " match(es)")
+    end
+end
+
+function AutoSteal:GetPrompt(pos)
+    local ok, res = pcall(function()
+        local closest = nil
+        local cd = math.huge
+        for _, v in ipairs(Workspace:GetDescendants()) do
+            if v:IsA("ProximityPrompt") and (tostring(v) == "CarryAreaEgg" or v.Name == "#CarryAreaEgg") then
+                local holder = v.Parent
+                if holder and holder:IsA("BasePart") then
+                    local d = (pos - holder.Position).Magnitude
+                    if d < cd then
+                        cd = d
+                        closest = v
+                    end
+                end
+            end
+        end
+        return closest
+    end)
+    if ok then
+        return res
+    end
+    return nil
+end
+
+-- TODO: adjust Walk steering if this game server-clamps WalkSpeed.
+function AutoSteal:TravelTo(pos, token)
+    local method = self.MovementMethod or "Walk"
+    local speed = math.clamp(tonumber(self.MoveSpeed) or 60, 16, 500)
+    if method == "Blink" then
+        pcall(function()
+            local hrp0 = GetHRP()
+            if hrp0 then
+                hrp0.CFrame = CFrame.new(hrp0.Position, pos)
+            end
+        end)
+        local steps = 0
+        while self.Enabled and token == self.Token and steps < 40 do
+            local hrp = GetHRP()
+            if not hrp then
+                break
+            end
+            if (pos - hrp.Position).Magnitude <= 6 then
+                break
+            end
+            pcall(function()
+                hrp.CFrame = CFrame.new(hrp.Position, pos)
+                Blink.Distance = math.clamp(tonumber(self.BlinkDistance) or 20, 5, 100)
+                Blink:BlinkNow()
+            end)
+            task.wait(0.55)
+            steps = steps + 1
+        end
+        return
+    end
+    if method == "Fly" then
+        pcall(function()
+            Fly.Speed = speed
+            if not Fly.Enabled then
+                Fly:Toggle(true)
+                self.StealOwnedFly = true
+            end
+        end)
+        local t0 = tick()
+        while self.Enabled and token == self.Token and tick() - t0 < 30 do
+            local hrp = GetHRP()
+            if not hrp then
+                break
+            end
+            local dir = pos - hrp.Position
+            if dir.Magnitude <= 6 then
+                break
+            end
+            pcall(function()
+                if Fly.BV and Fly.BV.Parent == hrp then
+                    Fly.BV.Velocity = dir.Unit * speed
+                else
+                    hrp.CFrame = hrp.CFrame + dir.Unit * math.min(dir.Magnitude, speed * 0.05)
+                end
+            end)
+            task.wait(0.05)
+        end
+        pcall(function()
+            if Fly.BV then
+                Fly.BV.Velocity = Vector3.new(0, 0, 0)
+            end
+        end)
+        return
+    end
+    -- Walk / Glide share the MoveTo steering loop (Glide only softens falls).
+    pcall(function()
+        if method == "Glide" then
+            Glide.Speed = speed
+            if not Glide.Enabled then
+                Glide:Toggle(true)
+                self.StealOwnedGlide = true
+            end
+        end
+        local hum = GetHumanoid()
+        if hum then
+            hum.WalkSpeed = speed
+        end
+    end)
+    local t0 = tick()
+    while self.Enabled and token == self.Token and tick() - t0 < 30 do
+        local dt = task.wait(0.05)
+        local hrp = GetHRP()
+        local char = GetCharacter()
+        if not hrp or not char then
+            break
+        end
+        local offset = pos - hrp.Position
+        if offset.Magnitude <= 6 then
+            break
+        end
+        pcall(function()
+            local hum = GetHumanoid()
+            if hum then
+                hum.WalkSpeed = speed
+            end
+            char:MoveTo(hrp.Position + offset.Unit * math.min(offset.Magnitude, speed * dt))
+        end)
+    end
+end
+
+function AutoSteal:StopMovement()
+    pcall(function()
+        local hum = GetHumanoid()
+        if hum then
+            hum.WalkSpeed = self.SavedWalkSpeed or 16
+        end
+    end)
+    if self.StealOwnedGlide then
+        pcall(function()
+            Glide:Toggle(false)
+        end)
+        self.StealOwnedGlide = false
+    end
+    if self.StealOwnedFly then
+        pcall(function()
+            Fly:Toggle(false)
+        end)
+        self.StealOwnedFly = false
+    end
+end
+
+function AutoSteal:StealOnce()
+    local matches = self:GetMatches()
+    if #matches == 0 then
+        if Notify then
+            Notify("AutoSteal: no matches")
+        end
+        return
+    end
+    local best = matches[1]
+    if self.BestValueOnly then
+        for _, m in ipairs(matches) do
+            if m.Value > best.Value then
+                best = m
+            end
+        end
+    end
+    local token = self.Token
+    local lastPos = best.Pos
+    self:TravelTo(best.Pos, token)
+    if not self.Enabled or token ~= self.Token then
+        return
+    end
+    task.wait(0.4)
+    local prompt = self:GetPrompt(best.Pos)
+    if prompt and fireproximityprompt then
+        pcall(function()
+            fireproximityprompt(prompt)
+        end)
+        task.wait(1)
+        pcall(function()
+            local again = self:GetPrompt(best.Pos)
+            if again and fireproximityprompt then
+                fireproximityprompt(again)
+            end
+        end)
+        if Notify then
+            Notify("AutoSteal: stole " .. tostring(best.Rarity) .. " (" .. tostring(best.Value) .. ")")
+        end
+    else
+        warn("[Quantum Hub] AutoSteal: no prompt" .. ((fireproximityprompt and "") or " (missing fireproximityprompt)"))
+        if Notify then
+            Notify("AutoSteal: no prompt found")
+        end
+    end
+    if self.ReturnToBase then
+        self:TravelTo(BASE_CFRAME.Position, token)
+        task.wait(0.5)
+        if self.GoBackOut and self.Enabled and token == self.Token and lastPos then
+            self:TravelTo(lastPos, token)
+        end
+    end
+end
+
+function AutoSteal:Toggle(state)
+    self.Enabled = state and true or false
+    if self.Enabled then
+        self:EnsureData()
+        pcall(function()
+            local hum = GetHumanoid()
+            self.SavedWalkSpeed = (hum and hum.WalkSpeed) or 16
+        end)
+        if not fireproximityprompt then
+            warn("[Quantum Hub] AutoSteal needs fireproximityprompt")
+            if Notify then
+                Notify("AutoSteal needs fireproximityprompt")
+            end
+        end
+        self:DiscoverFilters()
+        self.Token = self.Token + 1
+        local myToken = self.Token
+        if Notify then
+            Notify("AutoSteal enabled (" .. tostring(self.MovementMethod or "Walk") .. ")")
+        end
+        task.spawn(function()
+            while self.Enabled and myToken == self.Token do
+                local ok, err = pcall(function()
+                    self:StealOnce()
+                end)
+                if not ok then
+                    warn("[Quantum Hub] AutoSteal cycle failed: " .. tostring(err))
+                end
+                local delay = math.clamp(tonumber(self.CycleDelay) or 5, 1, 20)
+                local waited = 0
+                while waited < delay and self.Enabled and myToken == self.Token do
+                    task.wait(0.25)
+                    waited = waited + 0.25
+                end
+            end
+        end)
+    else
+        self.Token = self.Token + 1
+        self:StopMovement()
+    end
+end
+
 -- SpeedBypass -----------------------------------------------------
 local SpeedBypass = {
     Enabled = false,
@@ -1854,7 +2565,8 @@ function SpeedBypass:Toggle(state)
 end
 
 -- Glide -----------------------------------------------------------
-local Glide = {
+-- (assigned, not re-declared: forward-declared above for AutoSteal)
+Glide = {
     Enabled = false,
     Speed = 50,
     BV = nil,
@@ -1903,7 +2615,8 @@ function Glide:Refresh()
 end
 
 -- Blink -----------------------------------------------------------
-local Blink = {
+-- (assigned, not re-declared: forward-declared above for AutoSteal)
+Blink = {
     Enabled = false,
     Distance = 20,
     LastBlink = 0,
@@ -1929,7 +2642,8 @@ function Blink:BlinkNow()
 end
 
 -- Fly -------------------------------------------------------------
-local Fly = {
+-- (assigned, not re-declared: forward-declared above for AutoSteal)
+Fly = {
     Enabled = false,
     Speed = 50,
     BV = nil,
@@ -2081,7 +2795,55 @@ local Content = Window.Content
 local MainTab = createTab(Sidebar, Content, "Main", 1)
 local MovementTab = createTab(Sidebar, Content, "Movement", 2)
 local AutomationTab = createTab(Sidebar, Content, "Automation", 3)
-local SettingsTab = createTab(Sidebar, Content, "Settings", 4)
+local StealTab = createTab(Sidebar, Content, "Steal", 4)
+local SettingsTab = createTab(Sidebar, Content, "Settings", 5)
+
+-- Floating reopen button (mobile): tap toggles the window, drag moves it.
+local floatBtn = Instance.new("TextButton")
+floatBtn.Name = "FloatToggle"
+floatBtn.Size = UDim2.new(0, 56, 0, 56)
+floatBtn.Position = UDim2.new(1, -70, 1, -150)
+floatBtn.Text = "QH"
+floatBtn.Font = Enum.Font.GothamBold
+floatBtn.TextSize = 16
+floatBtn.ZIndex = 500
+floatBtn.BackgroundColor3 = Theme.Accent
+floatBtn.TextColor3 = Theme.ButtonText
+floatBtn.AutoButtonColor = true
+floatBtn.BorderSizePixel = 0
+floatBtn.Parent = Window.Gui
+ApplyCorner(floatBtn, 28)
+ApplyStroke(floatBtn, Theme.Outline, 1)
+do
+    local downPos, startPos, draggingFloat = nil, nil, false
+    floatBtn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            downPos = input.Position
+            startPos = floatBtn.Position
+            draggingFloat = false
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if downPos and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - downPos
+            if delta.Magnitude > 12 then
+                draggingFloat = true
+                pcall(function()
+                    floatBtn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+                end)
+            end
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(input)
+        if downPos and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+            if not draggingFloat then
+                CloseAllDropdowns()
+                Window.Main.Visible = not Window.Main.Visible
+            end
+            downPos, draggingFloat = nil, false
+        end
+    end)
+end
 
 -- Tab 1: Main (Combat)
 SectionLabel(MainTab, "Combat")
@@ -2091,7 +2853,7 @@ end)
 createSlider(MainTab, "Range", 5, 30, 16.5, function(v)
     KillAura.Range = v
 end)
-createDropdown(MainTab, "Priority", { "Nearest", "Lowest Health", "Random" }, "Nearest", function(v)
+createDropdown(MainTab, "Priority", { "Nearest", "Lowest Health", "Random", "Highest Health" }, "Nearest", function(v)
     KillAura.Priority = v
 end)
 createSlider(MainTab, "Attack Delay", 0.05, 0.5, 0.1, function(v)
@@ -2206,7 +2968,158 @@ createSlider(AutomationTab, "Interval", 1, 10, 1, function(v)
     AutoRedeem.Interval = v
 end)
 
--- Tab 4: Settings
+-- Tab 4: Steal (Auto Steal)
+SectionLabel(StealTab, "Auto Steal")
+createToggle(StealTab, "Auto Steal", false, function(v)
+    AutoSteal:Toggle(v)
+end)
+createSlider(StealTab, "Scan Radius", 50, 2000, 300, function(v)
+    AutoSteal.ScanRadius = v
+end)
+createDropdown(StealTab, "Movement Method", { "Walk", "Glide", "Blink", "Fly" }, "Walk", function(v)
+    AutoSteal.MovementMethod = v
+end)
+createCheckbox(StealTab, "Return to Base", true, function(v)
+    AutoSteal.ReturnToBase = v
+end)
+createCheckbox(StealTab, "Go Back Out", true, function(v)
+    AutoSteal.GoBackOut = v
+end)
+createSlider(StealTab, "Move Speed", 16, 500, 60, function(v)
+    AutoSteal.MoveSpeed = v
+end)
+createSlider(StealTab, "Blink Distance", 5, 100, 20, function(v)
+    AutoSteal.BlinkDistance = v
+end)
+createSlider(StealTab, "Cycle Delay", 1, 20, 5, function(v)
+    AutoSteal.CycleDelay = v
+end)
+
+SectionLabel(StealTab, "Filters (empty = allow all)")
+SectionLabel(StealTab, "Rarity")
+local rarityBox = Instance.new("Frame")
+rarityBox.Name = "RarityBox"
+rarityBox.Size = UDim2.new(1, 0, 0, 0)
+rarityBox.AutomaticSize = Enum.AutomaticSize.Y
+rarityBox.BackgroundTransparency = 1
+rarityBox.Parent = StealTab
+local rarityLayout = Instance.new("UIListLayout")
+rarityLayout.Padding = UDim.new(0, 4)
+rarityLayout.SortOrder = Enum.SortOrder.LayoutOrder
+rarityLayout.Parent = rarityBox
+
+SectionLabel(StealTab, "Mutation")
+local mutationBox = Instance.new("Frame")
+mutationBox.Name = "MutationBox"
+mutationBox.Size = UDim2.new(1, 0, 0, 0)
+mutationBox.AutomaticSize = Enum.AutomaticSize.Y
+mutationBox.BackgroundTransparency = 1
+mutationBox.Parent = StealTab
+local mutationLayout = Instance.new("UIListLayout")
+mutationLayout.Padding = UDim.new(0, 4)
+mutationLayout.SortOrder = Enum.SortOrder.LayoutOrder
+mutationLayout.Parent = mutationBox
+
+local function RebuildFilterBox(box, names, allow)
+    for _, c in ipairs(box:GetChildren()) do
+        if c:IsA("Frame") or c.Name == "EmptyNote" then
+            c:Destroy()
+        end
+    end
+    if #names == 0 then
+        local l = Instance.new("TextLabel")
+        l.Name = "EmptyNote"
+        l.Size = UDim2.new(1, 0, 0, 28)
+        l.BackgroundTransparency = 1
+        l.Text = "None discovered yet — press Refresh Filters in game."
+        l.TextColor3 = Theme.TextDim
+        l.Font = Enum.Font.Gotham
+        l.TextSize = 13
+        l.TextXAlignment = Enum.TextXAlignment.Left
+        l.Parent = box
+        return
+    end
+    for _, fname in ipairs(names) do
+        local fn = fname
+        allow[fn] = true
+        createCheckbox(box, fn, true, function(v)
+            allow[fn] = v and true or false
+        end)
+    end
+end
+
+local function RebuildStealFilters()
+    RebuildFilterBox(rarityBox, AutoSteal.DiscoveredRarities, AutoSteal.RarityAllow)
+    RebuildFilterBox(mutationBox, AutoSteal.DiscoveredMutations, AutoSteal.MutationAllow)
+end
+
+createButton(StealTab, "Refresh Filters", function()
+    AutoSteal:DiscoverFilters()
+    RebuildStealFilters()
+    AutoSteal:RefreshPreview()
+end)
+createButton(StealTab, "Reset Filters", function()
+    AutoSteal.RarityAllow = {}
+    AutoSteal.MutationAllow = {}
+    AutoSteal.MinValue = 0
+    AutoSteal.MaxValue = 1000000000
+    AutoSteal.MinWeight = 0
+    AutoSteal.MaxWeight = 1000000
+    AutoSteal.BestValueOnly = false
+    RebuildStealFilters()
+    AutoSteal:RefreshPreview()
+end)
+createCheckbox(StealTab, "Best Value Only", false, function(v)
+    AutoSteal.BestValueOnly = v
+end)
+createSlider(StealTab, "Min Value", 0, 1000000000, 0, function(v)
+    AutoSteal.MinValue = v
+end)
+createSlider(StealTab, "Max Value", 0, 1000000000, 1000000000, function(v)
+    AutoSteal.MaxValue = v
+end)
+createSlider(StealTab, "Min Weight", 0, 1000000, 0, function(v)
+    AutoSteal.MinWeight = v
+end)
+createSlider(StealTab, "Max Weight", 0, 1000000, 1000000, function(v)
+    AutoSteal.MaxWeight = v
+end)
+
+SectionLabel(StealTab, "Preview (matching eggs)")
+local previewLabel = Instance.new("TextLabel")
+previewLabel.Name = "StealPreview"
+previewLabel.Size = UDim2.new(1, 0, 0, 140)
+previewLabel.BackgroundColor3 = Theme.Panel
+previewLabel.BorderSizePixel = 0
+previewLabel.Text = "Press Refresh Preview."
+previewLabel.TextColor3 = Theme.Text
+previewLabel.Font = Enum.Font.Gotham
+previewLabel.TextSize = 13
+previewLabel.TextWrapped = true
+previewLabel.TextXAlignment = Enum.TextXAlignment.Left
+previewLabel.TextYAlignment = Enum.TextYAlignment.Top
+previewLabel.Parent = StealTab
+ApplyCorner(previewLabel, 8)
+ApplyStroke(previewLabel, Theme.Outline, 1)
+local previewPad = Instance.new("UIPadding")
+previewPad.PaddingTop = UDim.new(0, 8)
+previewPad.PaddingBottom = UDim.new(0, 8)
+previewPad.PaddingLeft = UDim.new(0, 8)
+previewPad.PaddingRight = UDim.new(0, 8)
+previewPad.Parent = previewLabel
+AutoSteal.PreviewLabel = previewLabel
+createButton(StealTab, "Refresh Preview", function()
+    AutoSteal:RefreshPreview()
+end)
+pcall(function()
+    AutoSteal:DiscoverFilters()
+end)
+RebuildStealFilters()
+pcall(function()
+    AutoSteal:RefreshPreview()
+end)
+
+-- Tab 5: Settings
 SectionLabel(SettingsTab, "Settings")
 createButton(SettingsTab, "Unload Quantum Hub", function()
     pcall(function()
@@ -2242,10 +3155,17 @@ createButton(SettingsTab, "Unload Quantum Hub", function()
         AutoSell.Enabled = false
         AutoFarm.Enabled = false
         AutoRedeem.Enabled = false
+        AutoSteal.Enabled = false
         KillAura.Enabled = false
         SpeedBypass.Enabled = false
         Glide.Enabled = false
         Fly.Enabled = false
+    end)
+    pcall(function()
+        AutoFarm.Token = AutoFarm.Token + 1
+        AutoRedeem.Token = AutoRedeem.Token + 1
+        AutoSteal.Token = AutoSteal.Token + 1
+        AutoSteal:StopMovement()
     end)
     pcall(function()
         Window.Gui:Destroy()
