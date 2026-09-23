@@ -13,6 +13,33 @@ local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 
 local LocalPlayer = Players.LocalPlayer
+if not LocalPlayer then
+    warn("[Quantum Hub] waiting for LocalPlayer...")
+    local t0 = tick()
+    while not Players.LocalPlayer and tick() - t0 < 15 do
+        task.wait(0.25)
+    end
+    LocalPlayer = Players.LocalPlayer
+    if not LocalPlayer then
+        pcall(function()
+            LocalPlayer = Players.PlayerAdded:Wait()
+        end)
+        LocalPlayer = LocalPlayer or Players.LocalPlayer
+    end
+end
+if not LocalPlayer then
+    warn("[Quantum Hub] FATAL: no LocalPlayer, aborting")
+    return
+end
+-- Delta mobile often injects before the game finishes loading.
+pcall(function()
+    if not game:IsLoaded() then
+        warn("[Quantum Hub] waiting for game load...")
+        game.Loaded:Wait()
+    end
+end)
+task.wait(1)
+warn("[Quantum Hub] Starting...")
 
 -- Placeholder teleport locations.
 -- Base is exact. Others are reasonable placeholders: adjust later.
@@ -208,9 +235,31 @@ local function stylePanel(frame)
 end
 
 local function createWindow()
-    local playerGui = LocalPlayer:WaitForChild("PlayerGui")
+    -- Resolve a parent that actually renders in most executors.
+    local parentGui = nil
+    pcall(function()
+        if typeof(gethui) == "function" then
+            parentGui = gethui()
+        elseif typeof(get_hidden_gui) == "function" then
+            parentGui = get_hidden_gui()
+        end
+    end)
+    if not parentGui then
+        local ok, pg = pcall(function()
+            return LocalPlayer:WaitForChild("PlayerGui", 10)
+        end)
+        if ok and pg then
+            parentGui = pg
+        else
+            parentGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+        end
+    end
+    if not parentGui then
+        warn("[Quantum Hub] FATAL: no GUI parent found")
+        return nil
+    end
 
-    local old = playerGui:FindFirstChild("QuantumHub")
+    local old = parentGui:FindFirstChild("QuantumHub")
     if old then
         pcall(function()
             old:Destroy()
@@ -221,7 +270,15 @@ local function createWindow()
     gui.Name = "QuantumHub"
     gui.ResetOnSpawn = false
     gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    gui.Parent = playerGui
+    gui.DisplayOrder = 999
+    gui.IgnoreGuiInset = true
+    local okParent, parentErr = pcall(function()
+        gui.Parent = parentGui
+    end)
+    if not okParent then
+        warn("[Quantum Hub] FATAL: could not parent GUI: " .. tostring(parentErr))
+        return nil
+    end
 
     local main = Instance.new("Frame")
     main.Name = "Main"
@@ -2013,6 +2070,11 @@ end
 -- 6. UI construction using the helpers -----------------------------
 
 local Window = createWindow()
+if not Window then
+    warn("[Quantum Hub] FATAL: window creation failed, aborting")
+    return
+end
+warn("[Quantum Hub] Window created")
 local Sidebar = Window.Sidebar
 local Content = Window.Content
 
