@@ -208,7 +208,7 @@ local function T(...)
         [ "autoTreadmill" ]= false ;
         [ "autoUpgradeTreadmill" ]= false ,[ "autoBuyTrails" ]= false ;
         [ "hideNotEnoughMoney" ]= false ;
-        [ "performanceMode" ]= false ,[ "disable3D" ]= false ,[ "antiAFK" ]= true ,[ "language" ]= "EN" }
+        [ "performanceMode" ]= false ,[ "disable3D" ]= false ,[ "antiAFK" ]= true ,[ "returnHeight" ]= 70 ,[ "language" ]= "EN" }
     else
         if type(e.selectedZones )~= "table" then
             e.selectedZones =r
@@ -246,9 +246,7 @@ local function T(...)
         if e.disable3D ==nil then
             e.disable3D = false
         end
-        if e.antiAFK ==nil then
-            e.antiAFK = true
-        end
+        if e.antiAFK ==nil then e.antiAFK = true end if e.returnHeight ==nil then e.returnHeight = 70 end
         if e.language and((e.language == "EN" or e.language == "TH" ))then
             currentLang=e.language
         end
@@ -264,7 +262,7 @@ local function x(...) pcall(function(...)
             [ "hideNotEnoughMoney" ]=(h.hideNotEnoughMoney == true );
             [ "performanceMode" ]=(h.performanceMode == true );
             [ "disable3D" ]=(h.disable3D == true );
-            [ "antiAFK" ]=(h.antiAFK == true );
+            [ "antiAFK" ]=(h.antiAFK == true ),[ "returnHeight" ]=math.clamp (tonumber(h.returnHeight )or 70 , 10 , 150 );
             [ "language" ]=currentLang or "EN" }
             local y=a:JSONEncode(r)writefile(z,y)
         end
@@ -281,14 +279,14 @@ local W=T()h={[ "godmode" ]= false ,[ "autoGlide" ]= false ,[ "autoHatch" ]= fal
 [ "selectedRarities" ]=W.selectedRarities ;
 [ "alwaysCollectSecretPlus" ]= false ,[ "minRarityTier" ]=W.minRarityTier ,[ "autoTreadmill" ]= false;
 [ "autoUpgradeTreadmill" ]= false,[ "autoBuyTrails" ]= false,[ "hideNotEnoughMoney" ]= false ;
-[ "performanceMode" ]=(W.performanceMode == true ),[ "disable3D" ]=(W.disable3D == true ),[ "antiAFK" ]= true,[ "onTreadmill" ]= false ,[ "lastTreadmillMount" ]= 0 ,[ "laneZ" ]= -360 ,[ "swapped" ]= false ;
+[ "performanceMode" ]=(W.performanceMode == true ),[ "disable3D" ]=(W.disable3D == true ),[ "antiAFK" ]= true,[ "returnHeight" ]=W.returnHeight or 70 ,[ "onTreadmill" ]= false ,[ "lastTreadmillMount" ]= 0 ,[ "laneZ" ]= -360 ,[ "swapped" ]= false ;
 [ "teleporting" ]= false ,[ "isReturning" ]= false ;
 [ "delivering" ]= false ,[ "holdingEggForGuard" ]= false ,[ "currentTargetModel" ]=nil,[ "targetPosition" ]=nil;
 [ "stateTime" ]=os.clock (),[ "statusText" ]= "Ready" ,[ "bestEggInfo" ]= "Scanning..." ;
 [ "gui" ]=nil;
 [ "alive" ]= true ,[ "plot" ]=nil;
 [ "pen" ]=nil,[ "origin" ]=nil;
-[ "tread" ]=nil}
+[ "tread" ]=nil} _G.CNMJStream=_G.CNMJStream or 0 RS=function(v,...) if os.clock()-_G.CNMJStream>3 then _G.CNMJStream=os.clock() pcall(function(...) o:RequestStreamAroundAsync(v) end) end end
 local m
 local e4
 local r4
@@ -730,14 +728,7 @@ o4=function(...)
     end
     return h.glideSpeed or 350
 end
-V4=function(e,y,...) y=y or 8
-    local u=Instance.new ( "Part" )u.Name = "SafetyFloorPad_AntiVoid" u.Size =Vector3.new ( 28 , 1.5 , 28 )u.Position =e-Vector3.new ( 0 , 3.2 , 0 )u.Anchored = true u.Transparency = 1 u.CanCollide = true u.Parent =r task.delay (y,function(...) pcall(function(...) u:Destroy()
-        end
-        )
-    end
-    )
-    return u
-end
+V4=function(e,y,...) y=y or 8 if _G.CNMJ_Pad and _G.CNMJ_Pad.Parent then _G.CNMJ_Pad.Position =e-Vector3.new ( 0 , 3.2 , 0 ) return _G.CNMJ_Pad end local u=Instance.new ( "Part" )u.Name = "CNMJ_SafetyPad" u.Size =Vector3.new ( 28 , 1.5 , 28 )u.Position =e-Vector3.new ( 0 , 3.2 , 0 )u.Anchored = true u.Transparency = 1 u.CanCollide = true u.Parent =r _G.CNMJ_Pad =u task.delay (y,function(...) pcall(function(...) if _G.CNMJ_Pad ==u then _G.CNMJ_Pad =nil end u:Destroy() end) end) return u end
 H4=function(e,...)
     if P and e then
         pcall(function(...)
@@ -757,7 +748,7 @@ end
 if typeof(hookmetamethod)== "function" and not _G._DesyncAntiRagdollHooked then
     _G._DesyncAntiRagdollHooked = true
     local e e=hookmetamethod(game, "__newindex" ,safeNewCClosure(function(r,y,u,...)
-        if not executorCheckCaller()and typeof(r)== "Instance" then
+        if false and not executorCheckCaller()and typeof(r)== "Instance" then
             if r:IsA( "Motor6D" )and(y== "Enabled" and u== false )then
                 return nil
             end
@@ -796,7 +787,7 @@ S4=function(e,...) e=e or o.Character
             local e= "RigidJointWeld_" ..r.Name
             local y=r.Part1 :FindFirstChild(e)
             if not y then
-                local y=Instance.new ( "WeldConstraint" )y.Name =e y.Part0 =r.Part0 y.Part1 =r.Part1 y.Parent =r.Part1
+                H("[S4] weld skipped to preserve animation")
             end
         end
     end
@@ -811,7 +802,7 @@ Z4=function(e,...)
     end
     local r=e:FindFirstChildOfClass( "Humanoid" )
     if r then
-        r:SetStateEnabled(Enum.HumanoidStateType.Ragdoll , false )r:SetStateEnabled(Enum.HumanoidStateType.FallingDown , false )r:SetStateEnabled(Enum.HumanoidStateType.Physics , false )r:SetStateEnabled(Enum.HumanoidStateType.PlatformStanding , false )r:SetStateEnabled(Enum.HumanoidStateType.Seated , false )
+        r:SetStateEnabled(Enum.HumanoidStateType.Ragdoll , false )r:SetStateEnabled(Enum.HumanoidStateType.FallingDown , false )
         if r.PlatformStand then
             r.PlatformStand = false
         end
@@ -833,12 +824,7 @@ z4=function(e,...)
     Z4(e)
     for e,y in ipairs(e:GetDescendants())do
         if y:IsA( "Motor6D" )then
-            (y:GetPropertyChangedSignal( "Enabled" )):Connect(function(...)
-                if not y.Enabled then
-                    y.Enabled = true
-                end
-            end
-            )
+            H("[z4] motor lock disabled")
         end
     end
     e.DescendantAdded :Connect(function(y,...)
@@ -1137,7 +1123,7 @@ d4=function(e,y,...)
             if r:IsA( "ProximityPrompt" )then
                 pcall(function(...) r.RequiresLineOfSight = false r.HoldDuration = 0
                     if typeof(fireproximityprompt)== "function" then
-                        fireproximityprompt(r, 0 )fireproximityprompt(r)
+                        fireproximityprompt(r)
                     end
                 end
                 )
@@ -1153,7 +1139,7 @@ d4=function(e,y,...)
                     if r:IsA( "ProximityPrompt" )then
                         pcall(function(...) r.RequiresLineOfSight = false r.HoldDuration = 0
                             if typeof(fireproximityprompt)== "function" then
-                                fireproximityprompt(r, 0 )fireproximityprompt(r)
+                                fireproximityprompt(r)
                             end
                         end
                         )
@@ -1171,14 +1157,11 @@ b4=function(e,...) h.godmode =e
     local y=r:FindFirstChildOfClass( "Humanoid" )
     if y then
         y:SetStateEnabled(Enum.HumanoidStateType.Dead ,not e)
-        if e and y.Health < 100 then
-            y.Health = 100
+        if e and y.Health < 25 then y.Health = 100
         end
     end
     for r,y in ipairs(r:GetDescendants())do
-        if y:IsA( "BasePart" )then
-            if e then
-                y.CanTouch = false y.CanCollide = false
+        if y:IsA( "BasePart" )then if e and (y.Name == "HumanoidRootPart" or y.Name == "LowerTorso" or y.Name == "UpperTorso") then y.CanTouch = false y.CanCollide = false
             end
         end
     end
@@ -1198,11 +1181,8 @@ A4=function(...)
         return false
     end
     pcall(function(...) y.BreakJointsOnDeath = false
-        local w=y:Clone()w.Parent =e y:Destroy()
-        local j=w:FindFirstChildOfClass( "Animator" )
-        if not j then
-            j=Instance.new ( "Animator" )j.Parent =w
-        end
+        local w=y H("[A4] humanoid reused, no clone")
+        H("[A4] animator reused")
         r.CurrentCamera.CameraSubject =w
         local k=e:FindFirstChild( "Animate" )
         if k and k:IsA( "LocalScript" )then
@@ -1456,7 +1436,7 @@ B4=function(...)
             if r and a~= false then
                 u=u+ 1 w[#w+ 1 ]=k.Position H(string.format ( "[PlaceEgg] Placed egg %s from inventory" ,tostring(j)))
             end
-            task.wait ( 0.04 )
+            task.wait ( 0.10 +math.random ()* 0.08 )
         end
     end
     return u
@@ -1515,7 +1495,7 @@ J4=function(e,...)
             end
         end
     end
-    if#j== 0 then
+    if#j> 3 then for e= 4 ,#j, 1 do j[e]=nil end end if#j== 0 then
         h.isHatching = false
         return 0
     end
@@ -1548,7 +1528,7 @@ J4=function(e,...)
                 end
             end
         end
-        )task.wait ( 0.04 )
+        )task.wait ( 0.10 +math.random ()* 0.08 )
     end
     task.wait ( 0.95 )h.isHatching = false H(string.format ( "[AutoHatch] Finished! Hatched %d eggs." ,a))
     return a
@@ -1583,9 +1563,9 @@ g4=function(e,r,u,...)
         return false
     end
     if k then
-        k.AutoRotate = false
+        k.AutoRotate = true
     end
-    local a=s4()e=math.max ( 100 ,e or h.glideSpeed or 600 )
+    local a=s4()a=Vector3.new (a.X ,math.clamp (h.returnHeight or 70 , 10 , 150 ),a.Z )e=math.max ( 100 ,e or h.glideSpeed or 600 )
     local V=h.laneZ or L h.isReturning = true h.stateTime =os.clock ()V4(a, 20 )j.AssemblyLinearVelocity =Vector3.zero j.AssemblyAngularVelocity =Vector3.zero
     local H=o4()
     local t=math.max (e,H)
@@ -1723,8 +1703,7 @@ local uk= 5 K4=function(e,...)
         Y4=e
     end
 end
-c4=function(e,...)
-    if not h.autoPlaceEvery5 then
+c4=function(e,...) h.decoyDone = false h.mainTargetCache =nil if not h.autoPlaceEvery5 then
         return false
     end
     h.batchStealCount =((h.batchStealCount or 0 ))+ 1 H(string.format ( "[AutoPlace] Steal trip %d / %d completed successfully." ,h.batchStealCount ,uk))
@@ -1744,10 +1723,10 @@ local function wk(e,r,u,w,...)
         return false
     end
     if a then
-        a.AutoRotate = false
+        a.AutoRotate = true
     end
     r=math.max ( 60 ,r or h.glideSpeed or 350 )
-    local V=e.Position V4(V, 14 )pcall(function(...) o:RequestStreamAroundAsync(V)
+    local V=e.Position V4(V, 14 )pcall(function(...) RS(V)
     end
     )k.AssemblyLinearVelocity =Vector3.zero k.AssemblyAngularVelocity =Vector3.zero
     local H=h.laneZ or L h.glidingToTarget = true h.stateTime =os.clock ()
@@ -1850,7 +1829,7 @@ R4=function(e,r,y,u,...)
                 if not j then
                     return false
                 end
-                task.wait ( 0.04 )
+                task.wait ( 0.10 +math.random ()* 0.08 )
             end
         end
     end
@@ -1864,10 +1843,10 @@ Q4=function(e,r,...)
         return false
     end
     if j then
-        j.AutoRotate = false
+        j.AutoRotate = true
     end
     local k=h.laneZ or L
-    local a=Vector3.new (E- 10 , 70 ,k)e=math.max ( 100 ,e or h.glideSpeed or 350 )h.isReturning = true h.stateTime =os.clock ()V4(Vector3.new (E, 70 ,k), 20 )pcall(u4)w.AssemblyLinearVelocity =Vector3.zero w.AssemblyAngularVelocity =Vector3.zero
+    local a=Vector3.new (E- 10 ,math.clamp (h.returnHeight or 70 , 10 , 150 ),k)e=math.max ( 100 ,e or h.glideSpeed or 350 )h.isReturning = true h.stateTime =os.clock ()V4(Vector3.new (E,math.clamp (h.returnHeight or 70 , 10 , 150 ),k), 20 )pcall(u4)w.AssemblyLinearVelocity =Vector3.zero w.AssemblyAngularVelocity =Vector3.zero
     local V=o4()
     local H=math.max (e,V)
     local s=os.clock ()+ 15
@@ -2350,7 +2329,7 @@ local function Hk(...)
     return y
 end
 local tk= 0
-local sk= 10
+local sk= 25
 local function pk(...)
     if not h.autoUpgradeTreadmill then
         return
@@ -2382,7 +2361,7 @@ local function pk(...)
         for r,y in ipairs(r:GetDescendants())do
             if y:IsA( "ProximityPrompt" )and y.Enabled then
                 if typeof(fireproximityprompt)== "function" then
-                    fireproximityprompt(y, 0 )fireproximityprompt(y)
+                    fireproximityprompt(y)
                 end
             end
             if y:IsA( "GuiButton" )and y.Visible then
@@ -2545,7 +2524,7 @@ local function vk(...)
     return false
 end
 local ik= 0
-local Rk= 8
+local Rk= 20
 local function gk(...)
     if not h.autoBuyTrails then
         return
@@ -3164,7 +3143,7 @@ U4=function(e,u,w,j,...)
         return false
     end
     h.securingEgg = true h.isReturning = false h.stateTime =os.clock ()h.holdingEggForGuard = true
-    local s=u.Position V4(s, 14 )h.currentTargetModel =w h.targetPosition =s a.AssemblyLinearVelocity =Vector3.zero a.AssemblyAngularVelocity =Vector3.zero Z4(k)pcall(function(...) o:RequestStreamAroundAsync(s)
+    local s=u.Position V4(s, 14 )h.currentTargetModel =w h.targetPosition =s a.AssemblyLinearVelocity =Vector3.zero a.AssemblyAngularVelocity =Vector3.zero Z4(k)pcall(function(...) RS(s)
     end
     )
     if not w and r:FindFirstChild( "AreaEggSlotsClient" )then
@@ -3209,9 +3188,9 @@ U4=function(e,u,w,j,...)
         if e and i then
             task.spawn (function(...) pcall(function(...)
                     if i:IsA( "RemoteFunction" )then
-                        i:InvokeServer({[ "Uid" ]=e})i:InvokeServer(e)
+                        i:InvokeServer({[ "Uid" ]=e})
                     else
-                        i:FireServer({[ "Uid" ]=e})i:FireServer(e)
+                        i:FireServer({[ "Uid" ]=e})
                     end
                 end
                 )
@@ -3269,9 +3248,9 @@ U4=function(e,u,w,j,...)
         if e and i then
             task.spawn (function(...) pcall(function(...)
                     if i:IsA( "RemoteFunction" )then
-                        i:InvokeServer({[ "Uid" ]=e})i:InvokeServer(e)
+                        i:InvokeServer({[ "Uid" ]=e})
                     else
-                        i:FireServer({[ "Uid" ]=e})i:FireServer(e)
+                        i:FireServer({[ "Uid" ]=e})
                     end
                 end
                 )
@@ -3343,7 +3322,7 @@ l4=function(e,u,...)
         end
         h.currentTargetModel =e.Model h.targetPosition =e.Position
         local r=((j.Position -e.Position )).Magnitude
-        local w=e.CFrame *CFrame.new ( 0 , 0.4 , 0 )pcall(function(...) o:RequestStreamAroundAsync(e.Position )
+        local w=e.CFrame *CFrame.new ( 0 , 0.4 , 0 )pcall(function(...) RS(e.Position )
         end
         )V4(e.Position , 8 )
         if r> 60 then
@@ -3354,7 +3333,7 @@ l4=function(e,u,...)
                 return false
             end
         else
-            h.statusText = "[2/7] Aligning with Lake Egg..." j.CFrame =w j.AssemblyLinearVelocity =Vector3.zero task.wait ( 0.04 )
+            h.statusText = "[2/7] Aligning with Lake Egg..." j.CFrame =w j.AssemblyLinearVelocity =Vector3.zero task.wait ( 0.10 +math.random ()* 0.08 )
         end
         j.Anchored = true task.wait ( 0.06 )j.Anchored = false h.holdingEggForGuard = true
         local k=os.clock ()+ 3
@@ -3388,10 +3367,10 @@ l4=function(e,u,...)
             return false
         end
     end
-    h.statusText = "[3/7] Pre-streaming Target..." pcall(function(...) o:RequestStreamAroundAsync(H)
+    h.statusText = "[3/7] Pre-streaming Target..." pcall(function(...) RS(H)
     end
     )V4(H, 12 )h.statusText = "[4/7] Waiting for physical bounce..." j.Anchored = false k:ChangeState(Enum.HumanoidStateType.Running )
-    local p=(k.WalkSpeed > 0 )and k.WalkSpeed or 16 k.WalkSpeed = 0 k:Move(Vector3.zero , false )j.AssemblyLinearVelocity =Vector3.zero j.AssemblyAngularVelocity =Vector3.zero task.wait ( 0.04 )
+    local p=(k.WalkSpeed > 0 )and k.WalkSpeed or 16 k.WalkSpeed = 0 k:Move(Vector3.zero , false )j.AssemblyLinearVelocity =Vector3.zero j.AssemblyAngularVelocity =Vector3.zero task.wait ( 0.10 +math.random ()* 0.08 )
     local B=j.Position
     local J=B.Y
     local K=select( 2 ,e4())or s
@@ -3487,7 +3466,7 @@ l4=function(e,u,...)
         return true
     end
 end
-T4=function(e,...)
+h.decoyDone=false h.mainTargetCache=nil h.decoyFailCount=h.decoyFailCount or {} local function GetNearestEgg() local hr=o.Character and o.Character:FindFirstChild("HumanoidRootPart") if not hr then return nil end local best,bd=nil,1e9 local es=h4(false) if not es or #es==0 then es=h4(true) end if not es then return nil end for _,rec in ipairs(es) do local st=rec.State if st=="Slot" or st=="Dropped" or st==1 then if rec.BoundsCFrame then local pos=rec.BoundsCFrame.Position if pos.X>=530 and not string.find(tostring(rec.Uid),"FirstArea") then if not (X4[rec.Uid] and os.clock()<X4[rec.Uid]) then local d=(hr.Position-pos).Magnitude if d<bd then bd=d best={Uid=rec.Uid,CFrame=rec.BoundsCFrame,Position=pos,Distance=d,Model=rec.PhysicalModel} end end end end end end return best end local function IsRagdolled() local ch=o.Character local hu=ch and ch:FindFirstChildOfClass("Humanoid") if not hu then return false end local st=nil pcall(function() st=hu:GetState() end) if st==Enum.HumanoidStateType.Ragdoll or st==Enum.HumanoidStateType.Physics or st==Enum.HumanoidStateType.FallingDown then return true end if hu.PlatformStand then return true end if ch then for _,d in ipairs(ch:GetDescendants()) do if d:IsA("BallSocketConstraint") or d:IsA("HingeConstraint") then return true end end end return false end local function WaitForRagdoll(tm,sid) local t0=os.clock() tm=tm or 10 while os.clock()-t0<tm and h.alive do if sid and O4~=sid then return false end if not h.pureTweenFarm and not h.autoFarmLoop then return false end if IsRagdolled() then return true end task.wait(0.15) end return false end local function DecoyMainTarget(mode) local sid=O4 local main=nil pcall(function() main=N4() end) if not main or not main.Uid then return nil end local fails=(h.decoyFailCount and h.decoyFailCount[main.Uid]) or 0 if fails>=5 then h.decoyFailCount[main.Uid]=0 h.decoyDone=false h.mainTargetCache=nil end if h.decoyDone and h.mainTargetCache and h.mainTargetCache.Uid==main.Uid then return main end local decoy=nil pcall(function() decoy=GetNearestEgg() end) if not decoy or not decoy.Uid or decoy.Uid==main.Uid then h.decoyDone=true h.mainTargetCache=main return main end h.statusText=string.format("[Decoy] Grabbing nearest before main...") local ok=false if mode=="WARP" then local ch=o.Character local hr=ch and ch:FindFirstChild("HumanoidRootPart") if hr then pcall(function() RS(decoy.Position) end) V4(decoy.Position,8) pcall(function() ch:PivotTo(decoy.CFrame*CFrame.new(0,0.4,0)) end) local t1=os.clock()+2.5 while not w4(decoy.Uid) and os.clock()<t1 and h.alive do if sid and O4~=sid then break end pcall(function() d4(decoy.Model,decoy.Position) end) if i then pcall(function() if i:IsA("RemoteFunction") then i:InvokeServer({["Uid"]=decoy.Uid}) else i:FireServer({["Uid"]=decoy.Uid}) end end) end task.wait(0.2) end ok=w4(decoy.Uid) else local rr=R4(decoy.CFrame*CFrame.new(0,0.4,0),h.glideSpeed,decoy.Uid,sid) if rr then local t1=os.clock()+2.5 while not w4(decoy.Uid) and os.clock()<t1 and h.alive do if sid and O4~=sid then break end pcall(function() d4(decoy.Model,decoy.Position) end) if i then pcall(function() if i:IsA("RemoteFunction") then i:InvokeServer({["Uid"]=decoy.Uid}) else i:FireServer({["Uid"]=decoy.Uid}) end end) end task.wait(0.2) end ok=w4(decoy.Uid) end end if not ok then X4[decoy.Uid]=os.clock()+2 return nil end h.statusText="[Decoy] Dropping decoy..." local t2=os.clock()+1.5 while w4(decoy.Uid) and os.clock()<t2 and h.alive do if sid and O4~=sid then return nil end pcall(u4) task.wait(0.12) end if not w4(decoy.Uid) then h.decoyDone=true h.mainTargetCache=main H("[Decoy] Dropped, switching to MAIN "..tostring(main.Uid)) return main end h.statusText="[Decoy] Drop failed, waiting ragdoll..." if WaitForRagdoll(10,sid) then pcall(u4) task.wait(0.15) pcall(u4) h.decoyDone=true h.mainTargetCache=main H("[Decoy] Ragdoll trigger, switching to MAIN "..tostring(main.Uid)) return main end X4[decoy.Uid]=os.clock()+2 return nil end T4=function(e,...)
     if Y4==e then
         return
     end
@@ -3545,10 +3524,10 @@ local Ck=os.clock ()task.spawn (function(...)
                     local u=w4()
                     if not u then
                         local u=O4
-                        local w=N4()
+                        local w=DecoyMainTarget("TWEEN") if not w then return end
                         if w and(h.pureTweenFarm and(Y4== "TWEEN" and O4==u))then
                             if h.onTreadmill or L4()then
-                                h.statusText = "[AutoSteal] Target found! Getting off treadmill..." M4()task.wait ( 0.08 )
+                                h.statusText = "[AutoSteal] Target found! Getting off treadmill..." M4()task.wait ( 0.08 +math.random ()* 0.06 )
                             end
                             local j,k=k4(w.Uid )
                             if not j and k~= "CarriedBySelf" then
@@ -3563,7 +3542,7 @@ local Ck=os.clock ()task.spawn (function(...)
                             if not h.godmode then
                                 b4( true )
                             end
-                            Z4(r)pcall(function(...) o:RequestStreamAroundAsync(w.Position )
+                            Z4(r)pcall(function(...) RS(w.Position )
                             end
                             )
                             local V=w.CFrame *CFrame.new ( 0 , 0.4 , 0 )
@@ -3572,7 +3551,7 @@ local Ck=os.clock ()task.spawn (function(...)
                                 return
                             end
                             if not s then
-                                t( "[AutoSteal] Egg was taken during flight. Switching to next target..." )X4[w.Uid ]=os.clock ()+ 5 D4()
+                                t( "[AutoSteal] Egg was taken during flight. Switching to next target..." )X4[w.Uid ]=os.clock ()+ 5 h.decoyFailCount[w.Uid ]=((h.decoyFailCount[w.Uid ])or 0 )+ 1 if((h.decoyFailCount[w.Uid ])or 0 )>= 5 then h.decoyFailCount[w.Uid ]= 0 h.decoyDone = false h.mainTargetCache =nil end D4()
                                 return
                             end
                             if h.pureTweenFarm and(Y4== "TWEEN" and((y.Position -w.Position )).Magnitude <= 22 )then
@@ -3597,7 +3576,7 @@ local Ck=os.clock ()task.spawn (function(...)
                                     end
                                 else
                                     if O4==u and(h.pureTweenFarm and Y4== "TWEEN" )then
-                                        t( "[AutoSteal] Guard Strike or Re-grab failed. Retrying with next egg..." )X4[w.Uid ]=os.clock ()+ 5 D4()
+                                        t( "[AutoSteal] Guard Strike or Re-grab failed. Retrying with next egg..." )X4[w.Uid ]=os.clock ()+ 5 h.decoyFailCount[w.Uid ]=((h.decoyFailCount[w.Uid ])or 0 )+ 1 if((h.decoyFailCount[w.Uid ])or 0 )>= 5 then h.decoyFailCount[w.Uid ]= 0 h.decoyDone = false h.mainTargetCache =nil end D4()
                                     end
                                 end
                             else
@@ -3625,7 +3604,7 @@ local Ck=os.clock ()task.spawn (function(...)
         if not r then
             t( "[AutoSteal Loop Recovered]:" ,tostring(y))pcall(D4)
         end
-        task.wait ( 0.08 )
+        task.wait ( 0.08 +math.random ()* 0.06 )
     end
 end
 )
@@ -3641,10 +3620,10 @@ local qk=os.clock ()task.spawn (function(...)
                     local r=w4()
                     if not r then
                         local r=O4
-                        local y=N4()
+                        local y=DecoyMainTarget("WARP") if not y then return end
                         if y and(h.autoFarmLoop and(Y4== "WARP" and O4==r))then
                             if h.onTreadmill or L4()then
-                                h.statusText = "[SnipeLoop] Target found! Getting off treadmill..." M4()task.wait ( 0.08 )
+                                h.statusText = "[SnipeLoop] Target found! Getting off treadmill..." M4()task.wait ( 0.08 +math.random ()* 0.06 )
                             end
                             local u=((y.Scale and y.Scale > 1.05 ))and string.format ( " | %.1fx" ,y.Scale )or "" H(string.format ( "[SnipeLoop] Starting Warp Snipe: %s | Zone: %s%s (Rank %d)" ,tostring(y.Category or "Egg" ),tostring(y.Area or "Field" ),u,tonumber(y.Rank )or 1 ))h.statusText =string.format ( "[SnipeLoop] Warping for %s%s..." ,tostring(y.Category or "Egg" ),u)
                             local w=l4(y,r)
@@ -3667,7 +3646,7 @@ local qk=os.clock ()task.spawn (function(...)
                                 if O4==r and(h.autoFarmLoop and Y4== "WARP" )then
                                     t( "[SnipeLoop] Snipe cycle failed. Resetting for next target..." )
                                     if y and y.Uid then
-                                        X4[y.Uid ]=os.clock ()+ 5
+                                        X4[y.Uid ]=os.clock ()+ 5 h.decoyFailCount[y.Uid ]=((h.decoyFailCount[y.Uid ])or 0 )+ 1 if((h.decoyFailCount[y.Uid ])or 0 )>= 5 then h.decoyFailCount[y.Uid ]= 0 h.decoyDone = false h.mainTargetCache =nil end
                                     end
                                     pcall(D4)
                                 end
@@ -3694,7 +3673,7 @@ local qk=os.clock ()task.spawn (function(...)
         if not r then
             t( "[SnipeLoop Loop Recovered]:" ,tostring(y))pcall(D4)
         end
-        task.wait ( 0.08 )
+        task.wait ( 0.08 +math.random ()* 0.06 )
     end
 end
 )task.spawn (function(...)
@@ -3841,7 +3820,7 @@ local function Ek(...) pcall(function(...)
         if e then
             e:SendKeyEvent( true ,Enum.KeyCode.Escape , false ,game)task.wait ( 0.12 )e:SendKeyEvent( false ,Enum.KeyCode.Escape , false ,game)task.wait ( 0.35 )e:SendKeyEvent( true ,Enum.KeyCode.Escape , false ,game)task.wait ( 0.12 )e:SendKeyEvent( false ,Enum.KeyCode.Escape , false ,game)pcall(function(...)
                 if typeof(e.SendTouchEvent )== "function" then
-                    e:SendTouchEvent( 99999 , 0 , 15 , 15 )task.wait ( 0.04 )e:SendTouchEvent( 99999 , 2 , 15 , 15 )
+                    e:SendTouchEvent( 99999 , 0 , 15 , 15 )task.wait ( 0.10 +math.random ()* 0.08 )e:SendTouchEvent( 99999 , 2 , 15 , 15 )
                 end
             end
             )
@@ -4546,7 +4525,7 @@ local function oM(...)
         end
         local function R(...)
             if p.UIElements and p.UIElements.Main then
-                (u:Create(kM.Btn ,TweenInfo.new ( 0.12 ,Enum.EasingStyle.Quart ),{[ "Size" ]=UDim2.fromOffset ( 42 , 42 )})):Play()task.wait ( 0.08 )kM.Btn.Size =UDim2.fromOffset ( 46 , 46 )p.UIElements.Main .Visible = true kM.Btn.Visible = false
+                (u:Create(kM.Btn ,TweenInfo.new ( 0.12 ,Enum.EasingStyle.Quart ),{[ "Size" ]=UDim2.fromOffset ( 42 , 42 )})):Play()task.wait ( 0.08 +math.random ()* 0.06 )kM.Btn.Size =UDim2.fromOffset ( 46 , 46 )p.UIElements.Main .Visible = true kM.Btn.Visible = false
                 if p.TabModule and p.TabModule.SelectedTab then
                     pcall(function(...) p.TabModule :SelectTab(p.TabModule.SelectedTab )
                     end
@@ -4824,7 +4803,7 @@ local function oM(...)
         [ "Max" ]= 1000 ;
         [ "Default" ]=h.glideSpeed or 600 },[ "Callback" ]=function(e,...) h.glideSpeed =e Y(e)
         end
-        })Fk.secDashboard =Tk:Section({[ "Title" ]=P.Settings.SecDashboard })Fk.paraLiveDash =Tk:Paragraph({[ "Title" ]=P.Settings.DashTitle ;
+        })Fk.sliderReturnHeight =Yk:Slider({[ "Title" ]= "Return Height" ,[ "Desc" ]= "Return-to-base height only (10-150). Outbound to egg ignores it." ,[ "Step" ]= 5 ,[ "Value" ]={[ "Min" ]= 10 ;[ "Max" ]= 150 ;[ "Default" ]=h.returnHeight or 70 },[ "Callback" ]=function(e,...) h.returnHeight =math.clamp (e or 70 , 10 , 150 )x() end })Fk.secDashboard =Tk:Section({[ "Title" ]=P.Settings.SecDashboard })Fk.paraLiveDash =Tk:Paragraph({[ "Title" ]=P.Settings.DashTitle ;
         [ "Desc" ]=string.format ( "Status: Ready\nFarm Mode: Idle\nCarried Eggs: 0\nFlight Speed: %d Studs/s" ,h.glideSpeed or 600 )})Fk.secUI =Tk:Section({[ "Title" ]=P.Settings.SecUI })Fk.dropLang =Tk:Dropdown({[ "Title" ]=P.Settings.LangTitle ,[ "Values" ]={ "English" , "à¹„à¸—à¸¢" },[ "Value" ]=(Xk== "EN" and "English" or "à¹„à¸—à¸¢" ),[ "Callback" ]=function(e,...)
             local r=(e== "à¹„à¸—à¸¢" )and "TH" or "EN"
             if r~=Xk then
@@ -5113,7 +5092,7 @@ local function oM(...)
     end
     )m.MouseButton1Click :Connect(function(...) h.glideSpeed =math.min ( 1000 ,((h.glideSpeed or 600 ))+ 25 )T.Text =string.format ( "%d Studs/s" ,h.glideSpeed )Y(h.glideSpeed )
     end
-    )A( "Reset Character State" , "Clear velocity, cancel push & unfreeze" ,Color3.fromRGB(145, 48, 73), 42 ,function(...) pcall(D4)pcall(u4)
+    local F2=Instance.new ( "Frame" )F2.Size =UDim2.new ( 1 , 0 , 0 , 48 )F2.BackgroundColor3 =t F2.LayoutOrder = 41.5 F2.Parent =n;(Instance.new ( "UICorner" ,F2)).CornerRadius =UDim.new ( 0 , 8 )local O2=Instance.new ( "TextLabel" )O2.Size =UDim2.new ( 1 , -130 , 0 , 18 )O2.Position =UDim2.new ( 0 , 10 , 0 , 6 )O2.BackgroundTransparency = 1 O2.Text = "Return Height" O2.TextColor3 =B O2.TextSize = 13 O2.Font =Enum.Font.GothamBold O2.TextXAlignment =Enum.TextXAlignment.Left O2.AutoLocalize = false O2.Parent =F2 local T2=Instance.new ( "TextLabel" )T2.Size =UDim2.new ( 0 , 70 , 0 , 24 )T2.Position =UDim2.new ( 1 , -80 , 0.5 , -12 )T2.BackgroundColor3 =V T2.Text =string.format ( "%d" ,h.returnHeight or 70 )T2.TextColor3 =Color3.fromRGB(232, 160, 181)T2.TextSize = 11 T2.Font =Enum.Font.GothamBold T2.AutoLocalize = false T2.Parent =F2;(Instance.new ( "UICorner" ,T2)).CornerRadius =UDim.new ( 0 , 6 )local W2=Instance.new ( "TextButton" )W2.Size =UDim2.new ( 0 , 24 , 0 , 24 )W2.Position =UDim2.new ( 1 , -110 , 0.5 , -12 )W2.BackgroundColor3 =s W2.Text = "-" W2.TextColor3 =B W2.TextSize = 14 W2.Font =Enum.Font.GothamBold W2.Parent =F2;(Instance.new ( "UICorner" ,W2)).CornerRadius =UDim.new ( 0 , 6 )local m2=Instance.new ( "TextButton" )m2.Size =UDim2.new ( 0 , 24 , 0 , 24 )m2.Position =UDim2.new ( 1 , -138 , 0.5 , -12 )m2.BackgroundColor3 =s m2.Text = "+" m2.TextColor3 =B m2.TextSize = 14 m2.Font =Enum.Font.GothamBold m2.Parent =F2;(Instance.new ( "UICorner" ,m2)).CornerRadius =UDim.new ( 0 , 6 )W2.MouseButton1Click :Connect(function(...) h.returnHeight =math.max ( 10 ,((h.returnHeight or 70 ))- 5 )T2.Text =string.format ( "%d" ,h.returnHeight )x() end )m2.MouseButton1Click :Connect(function(...) h.returnHeight =math.min ( 150 ,((h.returnHeight or 70 ))+ 5 )T2.Text =string.format ( "%d" ,h.returnHeight )x() end ))A( "Reset Character State" , "Clear velocity, cancel push & unfreeze" ,Color3.fromRGB(145, 48, 73), 42 ,function(...) pcall(D4)pcall(u4)
     end
     )A( "Unload Script" , "Destroy UI and stop all background loops" ,Color3.fromRGB(90, 30, 45), 43 ,function(...) aM()
     end
@@ -5226,3 +5205,6 @@ if h.antiAFK then
     task.spawn (bk)
 end
 H( "[+] Cheat Ni Mong - Jay v42.64 Ready! All-In-One Built-in Anti-AFK & Prometheus Ready!" )
+
+
+
