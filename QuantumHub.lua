@@ -105,7 +105,7 @@ local function safeInvoke(remote, ...)
     end
     local args = { ... }
     local ok, res = pcall(function()
-        return remote:InvokeServer(unpack(args))
+        return remote:InvokeServer(table.unpack(args))
     end)
     if not ok then
         warn("[Quantum Hub] Invoke failed (" .. tostring(remote:GetFullName()) .. "): " .. tostring(res))
@@ -121,7 +121,7 @@ local function safeFire(remote, ...)
     end
     local args = { ... }
     local ok, err = pcall(function()
-        remote:FireServer(unpack(args))
+        remote:FireServer(table.unpack(args))
     end)
     if not ok then
         warn("[Quantum Hub] Fire failed (" .. tostring(remote:GetFullName()) .. "): " .. tostring(err))
@@ -2258,7 +2258,7 @@ end)
 TrackConnection(RunService.Heartbeat:Connect(function()
     pcall(function()
         KillAura:Run()
-    end))
+    end)
     pcall(function()
         Glide:Refresh()
     end)
@@ -2303,7 +2303,7 @@ TrackConnection(RunService.Heartbeat:Connect(function()
                 Fly.BV.Parent = hrp
             end
         end
-    end))
+    end)
 end))
 
 -- 8. Toast (Library:Notify equivalent) ------------------------------
