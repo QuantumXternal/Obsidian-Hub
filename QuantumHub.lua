@@ -1527,7 +1527,29 @@ local AutoFarm = {
     },
     EggState = nil,
     Token = 0,
+    WasEnabled = false,
+    PausedBySteal = false,
 }
+
+function AutoFarm:Pause()
+    if self.Enabled then
+        self.WasEnabled = true
+        self.PausedBySteal = true
+        self.Enabled = false
+        self.Token = self.Token + 1
+        warn("[Quantum Hub] AutoFarm paused (steal running)")
+    end
+end
+
+function AutoFarm:Resume()
+    if self.PausedBySteal then
+        self.PausedBySteal = false
+        if self.WasEnabled then
+            self.WasEnabled = false
+            self:Toggle(true)
+        end
+    end
+end
 
 function AutoFarm:EnsureData()
     if not self.EggState then
@@ -1811,6 +1833,7 @@ local AutoSteal = {
     StealOwnedGlide = false,
     StealOwnedFly = false,
     SavedWalkSpeed = 16,
+    StealDriving = false, -- true while TravelTo owns the character
 }
 
 function AutoSteal:EnsureData()
@@ -2029,10 +2052,18 @@ end
 
 function AutoSteal:GetEggPos(egg)
     local ok, res = pcall(function()
-        if typeof(egg) == "table" and egg.BoundsCFrame then
-            local bc = egg.BoundsCFrame
-            if typeof(bc) == "CFrame" then
-                return bc.Position
+        if typeof(egg) == "table" then
+            -- TODO: adjust to this game's exact egg record position fields.
+            if egg.BoundsCFrame then
+                if typeof(egg.BoundsCFrame) == "CFrame" then
+                    return egg.BoundsCFrame.Position
+                end
+            end
+            if typeof(egg.Position) == "Vector3" then
+                return egg.Position
+            end
+            if typeof(egg.CFrame) == "CFrame" then
+                return egg.CFrame.Position
             end
         elseif typeof(egg) == "CFrame" then
             return egg.Position
@@ -2045,11 +2076,22 @@ function AutoSteal:GetEggPos(egg)
     return nil
 end
 
+-- Allow-list truth: no `true` entry anywhere = allow all. This keeps
+-- unchecked-everything, cleared tables, and pre-discovery states honest.
+local function AllowAll(t)
+    for _, v in pairs(t) do
+        if v == true then
+            return false
+        end
+    end
+    return true
+end
+
 function AutoSteal:PassesFilters(egg)
     local ok, res = pcall(function()
         local mode = self.FilterMode or "Rarity"
         local rarity = self:ResolveRarity(egg)
-        if mode == "Rarity" and next(self.RarityAllow) ~= nil then
+        if mode == "Rarity" and not AllowAll(self.RarityAllow) then
             -- Unresolvable rarity passes so schema drift can't hide everything.
             -- TODO: adjust to reject here if strict filtering is wanted.
             if rarity ~= nil and self.RarityAllow[rarity] ~= true then
@@ -2057,7 +2099,7 @@ function AutoSteal:PassesFilters(egg)
             end
         end
         local mut = self:ResolveMutation(egg)
-        if next(self.MutationAllow) ~= nil then
+        if not AllowAll(self.MutationAllow) then
             if mut ~= nil and self.MutationAllow[mut] ~= true then
                 return false
             end
@@ -2103,8 +2145,11 @@ function AutoSteal:GetMatches()
                 local dist = (pos - origin).Magnitude
                 local areaOk = true
                 pcall(function()
-                    if next(self.AreaAllow) ~= nil and typeof(egg) == "table" and egg.AreaId ~= nil then
-                        areaOk = self.AreaAllow[tostring(egg.AreaId)] == true
+                    -- Compare raw AND tostring: AreaId may be a number or a name.
+                    -- TODO: adjust if this game keys areas differently.
+                    if not AllowAll(self.AreaAllow) and typeof(egg) == "table" and egg.AreaId ~= nil then
+                        local raw, named = egg.AreaId, tostring(egg.AreaId)
+                        areaOk = self.AreaAllow[raw] == true or self.AreaAllow[named] == true
                     end
                 end)
                 if areaOk and dist <= (self.ScanRadius or 300) and self:PassesFilters(egg) then
@@ -2174,12 +2219,30 @@ function AutoSteal:GetPrompt(pos)
     local ok, res = pcall(function()
         local closest = nil
         local cd = math.huge
+        local maxD = math.max((self.ScanRadius or 300), 60)
         for _, v in ipairs(Workspace:GetDescendants()) do
             if v:IsA("ProximityPrompt") and (tostring(v) == "CarryAreaEgg" or v.Name == "#CarryAreaEgg") then
+                -- Holders can be parts, models, or attachments.
+                -- TODO: adjust if this game parents prompts elsewhere.
+                local anchor = nil
                 local holder = v.Parent
-                if holder and holder:IsA("BasePart") then
-                    local d = (pos - holder.Position).Magnitude
-                    if d < cd then
+                if holder then
+                    if holder:IsA("BasePart") then
+                        anchor = holder.Position
+                    elseif holder:IsA("Model") then
+                        local pivOk, piv = pcall(function()
+                            return holder:GetPivot().Position
+                        end)
+                        if pivOk then
+                            anchor = piv
+                        end
+                    elseif holder:IsA("Attachment") then
+                        anchor = holder.WorldPosition
+                    end
+                end
+                if anchor then
+                    local d = (pos - anchor).Magnitude
+                    if d < cd and d <= maxD then
                         cd = d
                         closest = v
                     end
@@ -2198,6 +2261,7 @@ end
 function AutoSteal:TravelTo(pos, token)
     local method = self.MovementMethod or "Walk"
     local speed = math.clamp(tonumber(self.MoveSpeed) or 60, 16, 500)
+    self.StealDriving = true
     if method == "Blink" then
         pcall(function()
             local hrp0 = GetHRP()
@@ -2222,6 +2286,7 @@ function AutoSteal:TravelTo(pos, token)
             task.wait(0.55)
             steps = steps + 1
         end
+        self.StealDriving = false
         return
     end
     if method == "Fly" then
@@ -2256,6 +2321,7 @@ function AutoSteal:TravelTo(pos, token)
                 Fly.BV.Velocity = Vector3.new(0, 0, 0)
             end
         end)
+        self.StealDriving = false
         return
     end
     -- Walk / Glide share the MoveTo steering loop (Glide only softens falls).
@@ -2292,6 +2358,7 @@ function AutoSteal:TravelTo(pos, token)
             char:MoveTo(hrp.Position + offset.Unit * math.min(offset.Magnitude, speed * dt))
         end)
     end
+    self.StealDriving = false
 end
 
 function AutoSteal:StopMovement()
@@ -2371,20 +2438,49 @@ end
 function AutoSteal:Toggle(state)
     self.Enabled = state and true or false
     if self.Enabled then
-        self:EnsureData()
+        -- Hard requirement: without the prompt API nothing can be stolen,
+        -- so abort instead of travelling forever.
+        if not fireproximityprompt then
+            warn("[Quantum Hub] AutoSteal aborted: missing fireproximityprompt")
+            if Notify then
+                Notify("AutoSteal aborted: executor lacks prompt API")
+            end
+            self.Enabled = false
+            return
+        end
+        -- Boot with retries: game data is often not ready on first enable.
+        local ready = false
+        for attempt = 1, 5 do
+            self:EnsureData()
+            if self.EggState then
+                local ok, field = pcall(function()
+                    return self.EggState.ReadFieldEggs()
+                end)
+                if ok and field and field.Records then
+                    ready = true
+                    break
+                end
+            end
+            task.wait(1)
+        end
+        if not ready then
+            warn("[Quantum Hub] AutoSteal aborted: EggState/field eggs unreadable")
+            if Notify then
+                Notify("AutoSteal aborted: no egg data")
+            end
+            self.Enabled = false
+            return
+        end
         pcall(function()
             local hum = GetHumanoid()
             self.SavedWalkSpeed = (hum and hum.WalkSpeed) or 16
         end)
-        if not fireproximityprompt then
-            warn("[Quantum Hub] AutoSteal needs fireproximityprompt")
-            if Notify then
-                Notify("AutoSteal needs fireproximityprompt")
-            end
-        end
         self:DiscoverFilters()
         pcall(function()
             AutoTreadmill:Pause()
+        end)
+        pcall(function()
+            AutoFarm:Pause()
         end)
         self.Token = self.Token + 1
         local myToken = self.Token
@@ -2412,6 +2508,9 @@ function AutoSteal:Toggle(state)
         self:StopMovement()
         pcall(function()
             AutoTreadmill:Resume()
+        end)
+        pcall(function()
+            AutoFarm:Resume()
         end)
     end
 end
@@ -2557,6 +2656,10 @@ function SpeedBypass:Toggle(state)
         local ok, conn = pcall(function()
             return RunService.Heartbeat:Connect(function()
                 if not self.Enabled then
+                    return
+                end
+                -- Yield while AutoSteal drives movement (it sets WalkSpeed itself).
+                if AutoSteal.StealDriving then
                     return
                 end
                 local char = LocalPlayer.Character
@@ -2716,6 +2819,10 @@ function Fly:Toggle(state)
         local ok2, conn = pcall(function()
             return RunService.RenderStepped:Connect(function()
                 if not self.Enabled or not self.BV then
+                    return
+                end
+                -- Yield while AutoSteal drives the same BodyVelocity.
+                if AutoSteal.StealDriving then
                     return
                 end
                 local hrpNow = GetHRP()
@@ -3037,12 +3144,11 @@ local Sidebar = Window.Sidebar
 local Content = Window.Content
 
 local MainTab = createTab(Sidebar, Content, "Main", 1)
-local MovementTab = createTab(Sidebar, Content, "Movement", 2)
-local AutomationTab = createTab(Sidebar, Content, "Automation", 3)
-local StealTab = createTab(Sidebar, Content, "Steal", 4)
-local TreadmillTab = createTab(Sidebar, Content, "Treadmill", 5)
-local MiscTab = createTab(Sidebar, Content, "Misc", 6)
-local SettingsTab = createTab(Sidebar, Content, "Settings", 7)
+local AutomationTab = createTab(Sidebar, Content, "Automation", 2)
+local StealTab = createTab(Sidebar, Content, "Steal", 3)
+local TreadmillTab = createTab(Sidebar, Content, "Treadmill", 4)
+local MiscTab = createTab(Sidebar, Content, "Misc", 5)
+local SettingsTab = createTab(Sidebar, Content, "Settings", 6)
 
 -- Floating reopen button (mobile): tap toggles the window, drag moves it.
 local floatBtn = Instance.new("TextButton")
@@ -3112,58 +3218,7 @@ createToggle(MainTab, "Instant Interact", false, function(v)
     InstantInteract:Toggle(v)
 end)
 
--- Tab 2: Movement
-SectionLabel(MovementTab, "Speed")
-createToggle(MovementTab, "Speed Bypass", false, function(v)
-    SpeedBypass:Toggle(v)
-end)
-createSlider(MovementTab, "Walk Speed", 100, 5000, 500, function(v)
-    SpeedBypass.WalkSpeed = v
-end)
-createCheckbox(MovementTab, "Safe Mode (cap 500)", true, function(v)
-    SpeedBypass.SafeMode = v
-end)
-
-SectionLabel(MovementTab, "Glide")
-createToggle(MovementTab, "Glide", false, function(v)
-    Glide:Toggle(v)
-end)
-createSlider(MovementTab, "Glide Speed", 10, 200, 50, function(v)
-    Glide.Speed = v
-    Glide:Refresh()
-end)
-
-SectionLabel(MovementTab, "Blink")
-createToggle(MovementTab, "Blink", false, function(v)
-    Blink:Toggle(v)
-end)
-createSlider(MovementTab, "Distance", 5, 100, 20, function(v)
-    Blink.Distance = v
-end)
-createButton(MovementTab, "Blink Now", function()
-    Blink:BlinkNow()
-end)
-
-SectionLabel(MovementTab, "Fly")
-createToggle(MovementTab, "Fly", false, function(v)
-    Fly:Toggle(v)
-end)
-createSlider(MovementTab, "Fly Speed", 20, 200, 50, function(v)
-    Fly.Speed = v
-end)
-
-SectionLabel(MovementTab, "Teleport")
-createDropdown(MovementTab, "Location", { "Base", "Forest", "Lake", "Desert", "Custom" }, "Base", function(v)
-    Teleport.Location = v
-end)
-createTextbox(MovementTab, "Custom X,Y,Z", "0,0,0", function(v)
-    Teleport.Custom = v
-end)
-createButton(MovementTab, "Teleport", function()
-    Teleport:TeleportNow()
-end)
-
--- Tab 3: Automation
+-- Tab 2: Automation
 SectionLabel(AutomationTab, "Auto Buy")
 createToggle(AutomationTab, "Auto Buy", false, function(v)
     AutoBuy:Toggle(v)
@@ -3214,7 +3269,7 @@ createSlider(AutomationTab, "Interval", 1, 10, 1, function(v)
     AutoRedeem.Interval = v
 end)
 
--- Tab 4: Steal (Auto Steal)
+-- Tab 3: Steal (Auto Steal)
 SectionLabel(StealTab, "Auto Steal")
 createToggle(StealTab, "Auto Steal", false, function(v)
     AutoSteal:Toggle(v)
@@ -3255,16 +3310,18 @@ local areaLayout = Instance.new("UIListLayout")
 areaLayout.Padding = UDim.new(0, 4)
 areaLayout.SortOrder = Enum.SortOrder.LayoutOrder
 areaLayout.Parent = areaBox
+local areaSetters = {}
 for _, aname in ipairs({ "Forest", "Lake", "Desert", "Jungle", "Snow", "Volcano", "Abyss Ocean", "Prehistoric", "Cosmic", "Cherry Blossom", "Titan Temple", "Light Dark" }) do
     local an = aname
     AutoSteal.AreaAllow[an] = true
-    createCheckbox(areaBox, an, true, function(v)
+    local _, setFn = createCheckbox(areaBox, an, true, function(v)
         if v then
             AutoSteal.AreaAllow[an] = true
         else
             AutoSteal.AreaAllow[an] = false
         end
     end)
+    areaSetters[an] = setFn
 end
 
 SectionLabel(StealTab, "Movement")
@@ -3306,6 +3363,54 @@ UpdateMovementBox = function()
     glideCtl.Visible = (m == "Glide")
 end
 UpdateMovementBox()
+
+SectionLabel(StealTab, "Anti-Clamp (serves steal speed)")
+createToggle(StealTab, "Speed Bypass", false, function(v)
+    SpeedBypass:Toggle(v)
+end)
+createSlider(StealTab, "Bypass Speed", 100, 5000, 500, function(v)
+    SpeedBypass.WalkSpeed = v
+end)
+createCheckbox(StealTab, "Safe Mode (cap 500)", true, function(v)
+    SpeedBypass.SafeMode = v
+end)
+
+SectionLabel(StealTab, "Travel (manual jumps)")
+createDropdown(StealTab, "Location", { "Base", "Forest", "Lake", "Desert", "Custom" }, "Base", function(v)
+    Teleport.Location = v
+end)
+createTextbox(StealTab, "Custom X,Y,Z", "0,0,0", function(v)
+    Teleport.Custom = v
+end)
+createButton(StealTab, "Teleport", function()
+    Teleport:TeleportNow()
+end)
+
+-- Static egg-type picker: always visible, checked = steal only those,
+-- all unchecked = allow all. Discovery extras render below it.
+local eggTypeSetters = {}
+SectionLabel(StealTab, "Egg Types (unchecked = allow all)")
+local eggTypeBox = Instance.new("Frame")
+eggTypeBox.Name = "EggTypeBox"
+eggTypeBox.Size = UDim2.new(1, 0, 0, 0)
+eggTypeBox.AutomaticSize = Enum.AutomaticSize.Y
+eggTypeBox.BackgroundTransparency = 1
+eggTypeBox.Parent = StealTab
+local eggTypeLayout = Instance.new("UIListLayout")
+eggTypeLayout.Padding = UDim.new(0, 4)
+eggTypeLayout.SortOrder = Enum.SortOrder.LayoutOrder
+eggTypeLayout.Parent = eggTypeBox
+for _, ename in ipairs(AutoSteal.PinRarities) do
+    local en = ename
+    local _, setFn = createCheckbox(eggTypeBox, en, false, function(v)
+        if v then
+            AutoSteal.RarityAllow[en] = true
+        else
+            AutoSteal.RarityAllow[en] = nil
+        end
+    end)
+    eggTypeSetters[en] = setFn
+end
 
 -- Filter context panels: only the active Steal On mode is visible.
 local rarityPanel = Instance.new("Frame")
@@ -3367,13 +3472,21 @@ mutationLayout.Padding = UDim.new(0, 4)
 mutationLayout.SortOrder = Enum.SortOrder.LayoutOrder
 mutationLayout.Parent = mutationBox
 
-local function RebuildFilterBox(box, names, allow)
+local function RebuildFilterBox(box, names, allow, skip)
     for _, c in ipairs(box:GetChildren()) do
         if c:IsA("Frame") or c.Name == "EmptyNote" then
             c:Destroy()
         end
     end
-    if #names == 0 then
+    local shown = {}
+    for _, fname in ipairs(names) do
+        -- Pinned egg types live in the static picker above; never duplicate.
+        if skip and table.find(skip, fname) then
+            continue
+        end
+        table.insert(shown, fname)
+    end
+    if #shown == 0 then
         local l = Instance.new("TextLabel")
         l.Name = "EmptyNote"
         l.Size = UDim2.new(1, 0, 0, 28)
@@ -3386,7 +3499,7 @@ local function RebuildFilterBox(box, names, allow)
         l.Parent = box
         return
     end
-    for _, fname in ipairs(names) do
+    for _, fname in ipairs(shown) do
         local fn = fname
         allow[fn] = true
         createCheckbox(box, fn, true, function(v)
@@ -3396,8 +3509,8 @@ local function RebuildFilterBox(box, names, allow)
 end
 
 local function RebuildStealFilters()
-    RebuildFilterBox(rarityBox, AutoSteal.DiscoveredRarities, AutoSteal.RarityAllow)
-    RebuildFilterBox(mutationBox, AutoSteal.DiscoveredMutations, AutoSteal.MutationAllow)
+    RebuildFilterBox(rarityBox, AutoSteal.DiscoveredRarities, AutoSteal.RarityAllow, AutoSteal.PinRarities)
+    RebuildFilterBox(mutationBox, AutoSteal.DiscoveredMutations, AutoSteal.MutationAllow, {})
 end
 
 createButton(rarityPanel, "Refresh Filters", function()
@@ -3408,11 +3521,18 @@ end)
 createButton(rarityPanel, "Reset Filters", function()
     AutoSteal.RarityAllow = {}
     AutoSteal.MutationAllow = {}
+    AutoSteal.AreaAllow = {}
     AutoSteal.MinValue = 0
     AutoSteal.MaxValue = 1000000000
     AutoSteal.MinWeight = 0
     AutoSteal.MaxWeight = 1000000
     AutoSteal.BestValueOnly = false
+    for _, fn in pairs(eggTypeSetters) do
+        pcall(fn, false)
+    end
+    for _, fn in pairs(areaSetters) do
+        pcall(fn, false)
+    end
     RebuildStealFilters()
     AutoSteal:RefreshPreview()
 end)
@@ -3474,7 +3594,7 @@ pcall(function()
     AutoSteal:RefreshPreview()
 end)
 
--- Tab 5: Treadmill (Auto Treadmill)
+-- Tab 4: Treadmill (Auto Treadmill)
 SectionLabel(TreadmillTab, "Auto Treadmill")
 createToggle(TreadmillTab, "Auto Treadmill", false, function(v)
     AutoTreadmill:Toggle(v)
@@ -3494,7 +3614,7 @@ createButton(TreadmillTab, "Find Treadmill Pad", function()
     end
 end)
 
--- Tab 6: Misc
+-- Tab 5: Misc
 SectionLabel(MiscTab, "Session")
 createToggle(MiscTab, "Anti AFK", false, function(v)
     AntiAFK:Toggle(v)
@@ -3504,7 +3624,7 @@ createToggle(MiscTab, "Low Graphics", false, function(v)
     GraphicsOpt:Toggle(v)
 end)
 
--- Tab 7: Settings
+-- Tab 6: Settings
 SectionLabel(SettingsTab, "Settings")
 createButton(SettingsTab, "Unload Quantum Hub", function()
     pcall(function()
@@ -3539,12 +3659,16 @@ createButton(SettingsTab, "Unload Quantum Hub", function()
         AutoBuy.Enabled = false
         AutoSell.Enabled = false
         AutoFarm.Enabled = false
+        AutoFarm.PausedBySteal = false
+        AutoFarm.WasEnabled = false
         AutoRedeem.Enabled = false
         AutoSteal.Enabled = false
+        AutoSteal.StealDriving = false
         KillAura.Enabled = false
         SpeedBypass.Enabled = false
         Glide.Enabled = false
         Fly.Enabled = false
+        Blink.Enabled = false
     end)
     pcall(function()
         AutoFarm.Token = AutoFarm.Token + 1
