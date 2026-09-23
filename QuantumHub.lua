@@ -41,16 +41,7 @@ end)
 task.wait(1)
 warn("[Quantum Hub] Starting...")
 
--- Placeholder teleport locations.
--- Base is exact. Others are reasonable placeholders: adjust later.
-local TeleportLocations = {
-    Base = CFrame.new(514, 71, -368),
-    Forest = CFrame.new(1000, 70, -500), -- TODO: adjust placeholder CFrame
-    Lake = CFrame.new(1500, 70, -600), -- TODO: adjust placeholder CFrame
-    Desert = CFrame.new(2000, 70, -700), -- TODO: adjust placeholder CFrame
-    Custom = CFrame.new(0, 0, 0), -- overwritten by Custom X,Y,Z textbox
-}
-
+-- Steal return target (exact base CFrame).
 local BASE_CFRAME = CFrame.new(514, 71, -368)
 
 -- 2. Theme (Obsidian Rose) -------------------------------------
@@ -176,24 +167,6 @@ end
 
 -- Forward declaration for toast (defined in section 8).
 local Notify
-
-local function ParseXYZ(str)
-    local ok, result = pcall(function()
-        local x, y, z = string.match(tostring(str), "([^,]+),([^,]+),([^,]+)")
-        if not x or not y or not z then
-            return nil
-        end
-        local nx, ny, nz = tonumber(x), tonumber(y), tonumber(z)
-        if not nx or not ny or not nz then
-            return nil
-        end
-        return CFrame.new(nx, ny, nz)
-    end)
-    if ok then
-        return result
-    end
-    return nil
-end
 
 local function GetCharacter()
     local char = LocalPlayer and LocalPlayer.Character
@@ -1529,7 +1502,7 @@ local AutoFarm = {
     MinArea = 9,
     ReturnToBase = true,
     CycleDelay = 1.5,
-    GoSpeed = 1500, -- un-hardcoded farm travel speed (was fixed 430)
+    GoSpeed = 1100, -- farm travel speed cap (unified 100-1100)
     Areas = {
         "Forest",
         "Lake",
@@ -1823,7 +1796,7 @@ local Glide, Blink, Fly, AutoTreadmill, PlaceHatch
 -- egg record schema (AreaId/BoundsCFrame verified from EggState).
 local AutoSteal = {
     Enabled = false,
-    ScanRadius = 1500,
+    ScanRadius = 5000,
     MovementMethod = "Fly", -- Walk / Glide / Blink / Fly
     FilterMode = "Rarity", -- Rarity / Best Value / Weight-Size
     AreaAllow = {}, -- empty = all areas; keys are AreaId strings
@@ -1841,7 +1814,7 @@ local AutoSteal = {
     MinWeight = 0,
     MaxWeight = 1000000,
     RarityAllow = {}, -- empty = allow all; TODO: adjust names via DiscoverFilters
-    MutationAllow = {}, -- empty = allow all; TODO: adjust names via DiscoverFilters
+    -- Mutation selection REMOVED (was mislabeled rarity data, per user).
     -- Pinned rarity display order (real names still come from DiscoverFilters).
     -- TODO: adjust pin list if this game adds/removes rarities.
     -- Rarity rank, highest to lowest: Divine first, Common last.
@@ -1849,7 +1822,6 @@ local AutoSteal = {
     PinRarities = { "Divine", "Eternal", "Secret", "Cosmic", "Mythic", "Legendary", "Epic", "Rare", "Uncommon", "Common" },
     SecretFirst = false, -- Divine/Eternal/Secret jump queue in any mode
     DiscoveredRarities = {},
-    DiscoveredMutations = {},
     EggState = nil,
     Save = nil,
     Assets = nil,
@@ -1860,6 +1832,7 @@ local AutoSteal = {
     StealOwnedFly = false,
     SavedWalkSpeed = 16,
     StealDriving = false, -- true while TravelTo owns the character
+    TimedBlacklist = {}, -- {Pos, At}: spots cooling down 60s
 }
 
 function AutoSteal:EnsureData()
@@ -1944,44 +1917,6 @@ function AutoSteal:DiscoverFilters()
         end
         self.DiscoveredRarities = ordered
     end)
-    pcall(function()
-        local muts = {}
-        if self.Assets then
-            for _, key in ipairs({ "Mutations", "MutationList", "MutationDirectory" }) do
-                local t = self.Assets[key]
-                if typeof(t) == "table" then
-                    for _, m in pairs(t) do
-                        local n = nil
-                        pcall(function()
-                            if typeof(m) == "string" then
-                                n = m
-                            elseif typeof(m) == "table" then
-                                n = m.DisplayName or m.Name
-                            end
-                        end)
-                        if n and not table.find(muts, tostring(n)) then
-                            table.insert(muts, tostring(n))
-                        end
-                    end
-                end
-            end
-        end
-        if #muts == 0 and self.EggState then
-            local ok, field = pcall(function()
-                return self.EggState.ReadFieldEggs()
-            end)
-            if ok and field and field.Records then
-                for _, egg in pairs(field.Records) do
-                    local name = self:ResolveMutation(egg)
-                    if name and not table.find(muts, name) then
-                        table.insert(muts, name)
-                    end
-                end
-            end
-        end
-        table.sort(muts)
-        self.DiscoveredMutations = muts
-    end)
 end
 
 function AutoSteal:ResolveRarity(egg)
@@ -1994,43 +1929,6 @@ function AutoSteal:ResolveRarity(egg)
             return nil
         end
         return entry.Rarity.DisplayName or entry.Rarity.Name
-    end)
-    if ok and res then
-        return tostring(res)
-    end
-    return nil
-end
-
--- TODO: adjust candidate fields to this game's egg mutation schema.
-function AutoSteal:ResolveMutation(egg)
-    local ok, res = pcall(function()
-        if typeof(egg) ~= "table" then
-            return nil
-        end
-        local raw = egg.Mutation or egg.MutationId or egg.MutationName
-        if raw == nil then
-            return nil
-        end
-        if typeof(raw) == "string" then
-            return raw
-        end
-        if self.Assets then
-            for _, key in ipairs({ "Mutations", "MutationList", "MutationDirectory" }) do
-                local t = self.Assets[key]
-                if typeof(t) == "table" then
-                    local e = t[raw] or t[tostring(raw)]
-                    if e ~= nil then
-                        if typeof(e) == "string" then
-                            return e
-                        end
-                        if typeof(e) == "table" then
-                            return e.DisplayName or e.Name
-                        end
-                    end
-                end
-            end
-        end
-        return tostring(raw)
     end)
     if ok and res then
         return tostring(res)
@@ -2124,12 +2022,6 @@ function AutoSteal:PassesFilters(egg)
                 return false
             end
         end
-        local mut = self:ResolveMutation(egg)
-        if not AllowAll(self.MutationAllow) then
-            if mut ~= nil and self.MutationAllow[mut] ~= true then
-                return false
-            end
-        end
         local w = self:ResolveWeight(egg)
         if w ~= nil and mode == "Weight-Size" then
             if w < (self.MinWeight or 0) or w > (self.MaxWeight or math.huge) then
@@ -2191,7 +2083,6 @@ function AutoSteal:GetMatches()
                         Dist = dist,
                         Area = area,
                         Rarity = self:ResolveRarity(egg) or "?",
-                        Mutation = self:ResolveMutation(egg) or "-",
                         Weight = self:ResolveWeight(egg),
                         Value = self:ResolveValue(egg) or 0,
                     })
@@ -2248,7 +2139,7 @@ function AutoSteal:UpdatePreview(matches)
         local lines = {}
         for i = 1, math.min(#matches, 8) do
             local m = matches[i]
-            table.insert(lines, string.format("%d. %s | %s | %s | %s", i, tostring(m.Area), tostring(m.Rarity), tostring(m.Mutation), tostring(m.Value)))
+            table.insert(lines, string.format("%d. %s | %s | %s", i, tostring(m.Area), tostring(m.Rarity), tostring(m.Value)))
         end
         if #matches > 8 then
             table.insert(lines, "+" .. tostring(#matches - 8) .. " more")
@@ -2310,7 +2201,7 @@ end
 -- TODO: adjust Walk steering if this game server-clamps WalkSpeed.
 function AutoSteal:TravelTo(pos, token)
     local method = self.MovementMethod or "Walk"
-    local speed = math.clamp(tonumber(self.MoveSpeed) or 500, 100, 1500)
+    local speed = math.clamp(tonumber(self.MoveSpeed) or 500, 100, 1100)
     self.StealDriving = true
     if method == "Blink" then
         pcall(function()
@@ -2320,7 +2211,7 @@ function AutoSteal:TravelTo(pos, token)
             end
         end)
         local steps = 0
-        while self.Enabled and token == self.Token and steps < 40 do
+        while self.Enabled and token == self.Token and steps < 27 do
             local hrp = GetHRP()
             if not hrp then
                 break
@@ -2330,7 +2221,7 @@ function AutoSteal:TravelTo(pos, token)
             end
             pcall(function()
                 hrp.CFrame = CFrame.new(hrp.Position, pos)
-                Blink.Distance = math.clamp(tonumber(self.BlinkDistance) or 100, 100, 1500)
+                Blink.Distance = math.clamp(tonumber(self.BlinkDistance) or 100, 100, 1100)
                 Blink:BlinkNow()
             end)
             task.wait(0.55)
@@ -2349,7 +2240,7 @@ function AutoSteal:TravelTo(pos, token)
             end
         end)
         local t0 = tick()
-        while self.Enabled and token == self.Token and tick() - t0 < 30 do
+        while self.Enabled and token == self.Token and tick() - t0 < 15 do
             local hrp = GetHRP()
             if not hrp then
                 break
@@ -2393,7 +2284,7 @@ function AutoSteal:TravelTo(pos, token)
         end
     end)
     local t0 = tick()
-    while self.Enabled and token == self.Token and tick() - t0 < 30 do
+    while self.Enabled and token == self.Token and tick() - t0 < 15 do
         local dt = task.wait(0.05)
         local hrp = GetHRP()
         local char = GetCharacter()
@@ -2468,14 +2359,35 @@ function AutoSteal:EggCount()
     return nil
 end
 
--- True when an egg is in hand right now: tool equipped, or the save
--- grew since beforeCount. Same Tool pattern as KillAura:CanUseTool.
-function AutoSteal:IsHoldingEgg(beforeCount)
+-- Snapshot of currently equipped tool names (for new-egg detection).
+function AutoSteal:ToolSet()
+    local set = {}
+    pcall(function()
+        local char = GetCharacter()
+        if char then
+            for _, t in ipairs(char:GetChildren()) do
+                if t:IsA("Tool") then
+                    set[t.Name] = true
+                end
+            end
+        end
+    end)
+    return set
+end
+
+-- True only on proof of a NEW egg: a tool that was not equipped before,
+-- or the save's egg count grew. Never any-Tool (stale hand lies).
+function AutoSteal:IsHoldingEgg(beforeCount, beforeTools)
     local held = false
     pcall(function()
         local char = GetCharacter()
-        if char and char:FindFirstChildOfClass("Tool") then
-            held = true
+        if char then
+            for _, t in ipairs(char:GetChildren()) do
+                if t:IsA("Tool") and (not beforeTools or not beforeTools[t.Name]) then
+                    held = true
+                    break
+                end
+            end
         end
     end)
     if not held and beforeCount ~= nil then
@@ -2546,6 +2458,7 @@ function AutoSteal:GrabAt(best, token)
         return "gone"
     end
     local before = self:EggCount()
+    local beforeTools = self:ToolSet()
     task.wait(0.4)
     local prompt = self:GetPrompt(best.Pos)
     if prompt and fireproximityprompt then
@@ -2553,7 +2466,7 @@ function AutoSteal:GrabAt(best, token)
             fireproximityprompt(prompt)
         end)
         task.wait(0.5)
-        if self:IsHoldingEgg(before) then
+        if self:IsHoldingEgg(before, beforeTools) then
             return "held"
         end
         pcall(function()
@@ -2563,7 +2476,7 @@ function AutoSteal:GrabAt(best, token)
             end
         end)
         task.wait(0.5)
-        if self:IsHoldingEgg(before) then
+        if self:IsHoldingEgg(before, beforeTools) then
             return "held"
         end
     else
@@ -2575,16 +2488,34 @@ function AutoSteal:GrabAt(best, token)
     return "gone"
 end
 
--- Fresh matches excluding positions already proven unstealable.
+-- Fresh matches excluding proven-unstealable spots: per-cycle ignores
+-- plus the 60s timed blacklist shared across cycles.
 function AutoSteal:PickFresh(ignored)
     local fresh = self:GetMatches()
-    if not ignored or #ignored == 0 then
+    local now = tick()
+    local live = {}
+    for _, ip in ipairs(ignored or {}) do
+        table.insert(live, ip)
+    end
+    for _, entry in ipairs(self.TimedBlacklist) do
+        if now - (entry.At or 0) < 60 then
+            table.insert(live, entry.Pos)
+        end
+    end
+    local kept = {}
+    for _, entry in ipairs(self.TimedBlacklist) do
+        if now - (entry.At or 0) < 60 then
+            table.insert(kept, entry)
+        end
+    end
+    self.TimedBlacklist = kept
+    if #live == 0 then
         return fresh
     end
     local out = {}
     for _, m in ipairs(fresh) do
         local skip = false
-        for _, ip in ipairs(ignored) do
+        for _, ip in ipairs(live) do
             local ok, close = pcall(function()
                 return (m.Pos - ip).Magnitude <= 10
             end)
@@ -2612,10 +2543,9 @@ function AutoSteal:PickBest(matches)
     return best
 end
 
+-- Always Instant Return: grab verified -> straight to base, no waits,
+-- no re-engage leg, no mode selection.
 function AutoSteal:GoBaseAndDeposit(token, lastPos)
-    if not self.ReturnToBase then
-        return
-    end
     self:TravelTo(BASE_CFRAME.Position, token)
     if not self.Enabled or token ~= self.Token then
         return
@@ -2630,9 +2560,6 @@ function AutoSteal:GoBaseAndDeposit(token, lastPos)
             PlaceHatch:HatchOnce()
         end
     end)
-    if self.GoBackOut and self.Enabled and token == self.Token and lastPos then
-        self:TravelTo(lastPos, token)
-    end
 end
 
 function AutoSteal:StealOnce()
@@ -2640,8 +2567,12 @@ function AutoSteal:StealOnce()
     local ignored = {}
     local matches = self:PickFresh(ignored)
     if #matches == 0 then
-        if Notify then
-            Notify("AutoSteal: no matches")
+        -- Throttled: one toast per 10s so base-hold doesn't spam.
+        if not self.LastNoMatchToast or tick() - self.LastNoMatchToast > 10 then
+            self.LastNoMatchToast = tick()
+            if Notify then
+                Notify("AutoSteal: no matches")
+            end
         end
         -- Nothing to steal: hold base instead of idling in the field.
         if self.ReturnToBase then
@@ -2651,6 +2582,7 @@ function AutoSteal:StealOnce()
     end
     local best = self:PickBest(matches)
     local goneStreak = 0
+    local targetTries = 0
     while self.Enabled and token == self.Token do
         self:TravelTo(best.Pos, token)
         if not self.Enabled or token ~= self.Token then
@@ -2673,9 +2605,33 @@ function AutoSteal:StealOnce()
             return
         end
         if result == "retry" then
-            -- Same egg still stealable: re-travel and re-fire until held.
-            goneStreak = 0
-            task.wait(0.25)
+            -- Same egg still stealable: keep trying, capped per target so
+            -- one ungrappable egg can't wedge the loop (6 tries -> 60s
+            -- blacklist -> retarget, no base trip).
+            targetTries = targetTries + 1
+            if targetTries >= 6 then
+                table.insert(self.TimedBlacklist, { Pos = best.Pos, At = tick() })
+                table.insert(ignored, best.Pos)
+                local fresh = self:PickFresh(ignored)
+                if #fresh > 0 then
+                    best = self:PickBest(fresh)
+                    goneStreak, targetTries = 0, 0
+                    if Notify then
+                        Notify("AutoSteal: spot cooling down, retargeting")
+                    end
+                else
+                    if Notify then
+                        Notify("AutoSteal: target stuck, returning")
+                    end
+                    if self.ReturnToBase then
+                        self:TravelTo(BASE_CFRAME.Position, token)
+                    end
+                    return
+                end
+            else
+                goneStreak = 0
+                task.wait(0.25)
+            end
         else
             goneStreak = goneStreak + 1
             if goneStreak < 3 then
@@ -2687,7 +2643,7 @@ function AutoSteal:StealOnce()
                 local fresh = self:PickFresh(ignored)
                 if #fresh > 0 then
                     best = self:PickBest(fresh)
-                    goneStreak = 0
+                    goneStreak, targetTries = 0, 0
                     if Notify then
                         Notify("AutoSteal: retargeting " .. tostring(best.Rarity))
                     end
@@ -2708,6 +2664,9 @@ end
 
 function AutoSteal:Toggle(state)
     self.Enabled = state and true or false
+    -- Fixed Instant Return behavior (no mode selection).
+    self.ReturnToBase = true
+    self.GoBackOut = false
     if self.Enabled then
         -- Hard requirement: without the prompt API nothing can be stolen,
         -- so abort instead of travelling forever.
@@ -2720,6 +2679,7 @@ function AutoSteal:Toggle(state)
             return
         end
         -- Boot with retries: game data is often not ready on first enable.
+        -- Both field eggs AND the save (grab detector) must read, or abort.
         local ready = false
         for attempt = 1, 5 do
             self:EnsureData()
@@ -2727,7 +2687,8 @@ function AutoSteal:Toggle(state)
                 local ok, field = pcall(function()
                     return self.EggState.ReadFieldEggs()
                 end)
-                if ok and field and field.Records then
+                local saveOk = (self:EggCount() ~= nil)
+                if ok and field and field.Records and saveOk then
                     ready = true
                     break
                 end
@@ -2735,9 +2696,9 @@ function AutoSteal:Toggle(state)
             task.wait(1)
         end
         if not ready then
-            warn("[Quantum Hub] AutoSteal aborted: EggState/field eggs unreadable")
+            warn("[Quantum Hub] AutoSteal aborted: egg data or save unreadable")
             if Notify then
-                Notify("AutoSteal aborted: no egg data")
+                Notify("AutoSteal aborted: no egg/save data")
             end
             self.Enabled = false
             return
@@ -2789,7 +2750,7 @@ end
 -- SpeedBypass -----------------------------------------------------
 local SpeedBypass = {
     Enabled = false,
-    WalkSpeed = 1500,
+    WalkSpeed = 1100,
     SafeMode = false,
     Hooked = false,
     SpeedConn = nil,
@@ -3156,43 +3117,7 @@ function Fly:Toggle(state)
     end
 end
 
--- Teleport --------------------------------------------------------
-local Teleport = {
-    Location = "Base",
-    Custom = "0,0,0",
-}
-
-function Teleport:TeleportNow()
-    local dest = nil
-    pcall(function()
-        if self.Location == "Custom" then
-            dest = ParseXYZ(self.Custom)
-            if not dest then
-                warn("[Quantum Hub] Teleport: bad Custom X,Y,Z: " .. tostring(self.Custom))
-                return
-            end
-        else
-            dest = TeleportLocations[self.Location]
-            if not dest then
-                dest = BASE_CFRAME
-            end
-        end
-    end)
-    if not dest then
-        return
-    end
-    pcall(function()
-        local hrp = GetHRP()
-        if hrp then
-            hrp.CFrame = dest
-        else
-            local char = GetCharacter()
-            if char then
-                char:MoveTo(dest.Position)
-            end
-        end
-    end)
-end
+-- (Manual Travel jumps removed: teleport routing deleted with the module.)
 
 -- AutoTreadmill -----------------------------------------------------
 -- Stand-on-treadmill loop. Teleports once onto the treadmill pad and lets
@@ -3206,7 +3131,17 @@ AutoTreadmill = {
     TreadmillCF = nil,
     WasEnabled = false,
     PausedBySteal = false,
+    StandInterval = 1,
+    StatusLabel = nil, -- wired by Treadmill tab UI
 }
+
+local function TreadmillStatus(text)
+    pcall(function()
+        if AutoTreadmill.StatusLabel then
+            AutoTreadmill.StatusLabel.Text = text
+        end
+    end)
+end
 
 function AutoTreadmill:FindTreadmill()
     local ok, res = pcall(function()
@@ -3257,12 +3192,14 @@ function AutoTreadmill:Toggle(state)
         end
         if not self.TreadmillCF then
             warn("[Quantum Hub] AutoTreadmill: pad not found")
+            TreadmillStatus("Pad: not found.")
             if Notify then
                 Notify("Treadmill: pad not found")
             end
             self.Enabled = false
             return
         end
+        TreadmillStatus("Pad: locked, standing.")
         self.Token = self.Token + 1
         local myToken = self.Token
         if Notify then
@@ -3278,11 +3215,12 @@ function AutoTreadmill:Toggle(state)
                         end
                     end
                 end)
-                task.wait(1)
+                task.wait(math.clamp(tonumber(self.StandInterval) or 1, 0.5, 5))
             end
         end)
     else
         self.Token = self.Token + 1
+        TreadmillStatus("Pad: idle.")
     end
 end
 
@@ -3510,13 +3448,36 @@ PlaceHatch = {
     HatchRemotes = { "RF/EggWorld/AskHatch", "RE/EggWorld/HatchEgg", "RF/Hatch/AskHatch" },
 }
 
+-- Invoke with a 3s timeout: a hung server yield must never freeze steal.
+local function InvokeTimeout(remote, timeout)
+    local done, result = false, nil
+    task.spawn(function()
+        local ok, res = pcall(function()
+            return remote:InvokeServer()
+        end)
+        result = { ok, res }
+        done = true
+    end)
+    local t0 = tick()
+    while not done and tick() - t0 < (timeout or 3) do
+        task.wait(0.1)
+    end
+    if not done then
+        warn("[Quantum Hub] PlaceHatch invoke timed out")
+        return false
+    end
+    if result and result[1] then
+        return true
+    end
+    return false
+end
+
 function PlaceHatch:TryEach(list, isInvoke)
     for _, path in ipairs(list) do
         local remote = getRemote(path)
         if remote then
             if isInvoke then
-                local ok = safeInvoke(remote)
-                if ok then
+                if InvokeTimeout(remote, 3) then
                     return true
                 end
             else
@@ -3610,8 +3571,8 @@ end
 
 -- Tab 1: Main (Combat)
 SectionLabel(MainTab, "Combat")
-createDropdown(MainTab, "Kill Aura Mode", { "Off", "On" }, "Off", function(v)
-    KillAura:Toggle(v == "On")
+createToggle(MainTab, "Bat Aura", false, function(v)
+    KillAura:Toggle(v)
 end)
 createSlider(MainTab, "Range", 5, 30, 16.5, function(v)
     KillAura.Range = v
@@ -3622,8 +3583,8 @@ end)
 createSlider(MainTab, "Attack Delay", 0.05, 0.5, 0.1, function(v)
     KillAura.AttackDelay = v
 end)
-createDropdown(MainTab, "Knockback Protection", { "Off", "On" }, "Off", function(v)
-    NoKnockback:Toggle(v == "On")
+createToggle(MainTab, "No Knockback", false, function(v)
+    NoKnockback:Toggle(v)
 end)
 createToggle(MainTab, "Instant Interact", true, function(v)
     InstantInteract:Toggle(v)
@@ -3631,8 +3592,8 @@ end)
 
 -- Tab 2: Automation
 SectionLabel(AutomationTab, "Auto Buy")
-createDropdown(AutomationTab, "Auto Buy", { "Off", "On" }, "Off", function(v)
-    AutoBuy:Toggle(v == "On")
+createToggle(AutomationTab, "Auto Buy", false, function(v)
+    AutoBuy:Toggle(v)
 end)
 local buySetters = {}
 createDropdown(AutomationTab, "Buy Set", { "All", "Treadmills Only", "Bases Only", "Trails Only", "Treadmills+Bases", "Treadmills+Trails", "Bases+Trails" }, "All", function(v)
@@ -3683,8 +3644,8 @@ createSlider(AutomationTab, "Buy Interval", 0.1, 2, 0.5, function(v)
 end)
 
 SectionLabel(AutomationTab, "Auto Sell")
-createDropdown(AutomationTab, "Auto Sell", { "Off", "On" }, "Off", function(v)
-    AutoSell:Toggle(v == "On")
+createToggle(AutomationTab, "Auto Sell", false, function(v)
+    AutoSell:Toggle(v)
 end)
 local sellSetters = {}
 local function ApplySellSet(set)
@@ -3716,26 +3677,18 @@ for _, rarity in ipairs({ "Common", "Uncommon", "Rare", "Epic", "Legendary", "My
     sellSetters[r] = setFn
 end
 
-SectionLabel(AutomationTab, "Auto Farm")
-createDropdown(AutomationTab, "Auto Farm", { "Off", "On" }, "Off", function(v)
-    AutoFarm:Toggle(v == "On")
+SectionLabel(AutomationTab, "Placing")
+createToggle(AutomationTab, "Auto Place", false, function(v)
+    AutoSteal.PlaceEnabled = v
 end)
-createDropdown(AutomationTab, "Farm Area Floor", { "Forest", "Lake", "Desert", "Jungle", "Snow", "Volcano", "Abyss Ocean", "Prehistoric", "Cosmic", "Cherry Blossom", "Titan Temple", "Light Dark" }, "Cherry Blossom", function(v)
-    AutoFarm.MinArea = table.find(AutoFarm.Areas, v) or 1
-end)
-createDropdown(AutomationTab, "Farm Return", { "Return to Base", "Stay in Field" }, "Return to Base", function(v)
-    AutoFarm.ReturnToBase = (v == "Return to Base")
-end)
-createSlider(AutomationTab, "Farm Speed", 100, 5000, 1500, function(v)
-    AutoFarm.GoSpeed = v
-end)
-createSlider(AutomationTab, "Cycle Delay", 1, 20, 1.5, function(v)
-    AutoFarm.CycleDelay = v
+SectionLabel(AutomationTab, "Hatching")
+createToggle(AutomationTab, "Auto Hatch", false, function(v)
+    AutoSteal.HatchEnabled = v
 end)
 
 SectionLabel(AutomationTab, "Auto Redeem Index")
-createDropdown(AutomationTab, "Auto Redeem", { "Off", "On" }, "Off", function(v)
-    AutoRedeem:Toggle(v == "On")
+createToggle(AutomationTab, "Auto Redeem", false, function(v)
+    AutoRedeem:Toggle(v)
 end)
 createDropdown(AutomationTab, "Redeem Interval", { "1s Turbo", "2s Safe", "5s Slow" }, "1s Turbo", function(v)
     if v == "2s Safe" then
@@ -3749,40 +3702,14 @@ end)
 
 -- Tab 3: Steal (Auto Steal)
 SectionLabel(StealTab, "Auto Steal")
-createDropdown(StealTab, "Auto Steal", { "Off", "Instant Return to Base", "Return + Re-engage", "Stay (no return)" }, "Off", function(v)
-    if v == "Off" then
-        AutoSteal:Toggle(false)
-    else
-        AutoSteal.ReturnToBase = (v ~= "Stay (no return)")
-        AutoSteal.GoBackOut = (v == "Return + Re-engage")
-        AutoSteal:Toggle(true)
-    end
+local _, stealSet = createToggle(StealTab, "Auto Steal", false, function(v)
+    AutoSteal:Toggle(v)
 end)
 createDropdown(StealTab, "Pickup Mode", { "Instant (Hold=0)", "Normal" }, "Instant (Hold=0)", function(v)
     InstantInteract:Toggle(v == "Instant (Hold=0)")
 end)
 createCheckbox(StealTab, "Secret First (any mode)", false, function(v)
     AutoSteal.SecretFirst = v
-end)
-createButton(StealTab, "Steal Now (one grab)", function()
-    pcall(function()
-        if not AutoSteal.Enabled then
-            AutoSteal:Toggle(true)
-        else
-            task.spawn(function()
-                pcall(function()
-                    AutoSteal:StealOnce()
-                end)
-            end)
-        end
-    end)
-end)
-createButton(StealTab, "Stop Current Steal", function()
-    AutoSteal.Token = AutoSteal.Token + 1
-    AutoSteal:StopMovement()
-    if Notify then
-        Notify("Steal stopped")
-    end
 end)
 pcall(function()
     InstantInteract:Toggle(true)
@@ -3795,33 +3722,11 @@ createDropdown(StealTab, "Steal On", { "Rarity", "Best Value", "Weight-Size" }, 
         UpdateStealVisibility()
     end
 end)
-createSlider(StealTab, "Scan Radius", 50, 10000, 1500, function(v)
+createSlider(StealTab, "Scan Radius", 50, 10000, 5000, function(v)
     AutoSteal.ScanRadius = v
 end)
 createSlider(StealTab, "Cycle Delay", 0.5, 10, 1.5, function(v)
     AutoSteal.CycleDelay = v
-end)
-createCheckbox(StealTab, "Return to Base", true, function(v)
-    AutoSteal.ReturnToBase = v
-end)
-createCheckbox(StealTab, "Go Back Out", true, function(v)
-    AutoSteal.GoBackOut = v
-end)
-createCheckbox(StealTab, "Auto Place (after base)", false, function(v)
-    AutoSteal.PlaceEnabled = v
-end)
-createCheckbox(StealTab, "Auto Hatch (when ready)", false, function(v)
-    AutoSteal.HatchEnabled = v
-end)
-createButton(StealTab, "Place Eggs Now", function()
-    pcall(function()
-        PlaceHatch:PlaceOnce()
-    end)
-end)
-createButton(StealTab, "Hatch Now", function()
-    pcall(function()
-        PlaceHatch:HatchOnce()
-    end)
 end)
 
 SectionLabel(StealTab, "Area (empty = all areas)")
@@ -3849,28 +3754,6 @@ for _, aname in ipairs({ "Forest", "Lake", "Desert", "Jungle", "Snow", "Volcano"
     end)
     areaSetters[an] = setFn
 end
-createDropdown(StealTab, "Area Preset", { "All Areas", "High Tier Only (Cosmic+)", "Cherry+Titan+LightDark", "Custom" }, "All Areas", function(v)
-    if v == "Custom" then
-        return
-    end
-    local want = {}
-    if v == "All Areas" then
-        want = nil -- empty = allow all
-    elseif v == "High Tier Only (Cosmic+)" then
-        want = { Cosmic = true, ["Cherry Blossom"] = true, ["Titan Temple"] = true, ["Light Dark"] = true }
-    elseif v == "Cherry+Titan+LightDark" then
-        want = { ["Cherry Blossom"] = true, ["Titan Temple"] = true, ["Light Dark"] = true }
-    end
-    AutoSteal.AreaAllow = {}
-    for an, setFn in pairs(areaSetters) do
-        local on = (want == nil) or (want[an] == true)
-        if on then
-            AutoSteal.AreaAllow[an] = true
-        end
-        pcall(setFn, on)
-    end
-    AutoSteal:RefreshPreview()
-end)
 
 SectionLabel(StealTab, "Movement")
 createDropdown(StealTab, "Movement Method", { "Walk", "Glide", "Blink", "Fly" }, "Fly", function(v)
@@ -3889,17 +3772,17 @@ local moveLayout = Instance.new("UIListLayout")
 moveLayout.Padding = UDim.new(0, 6)
 moveLayout.SortOrder = Enum.SortOrder.LayoutOrder
 moveLayout.Parent = moveBox
-local walkCtl, walkApply = createSlider(moveBox, "Walk Speed", 100, 1500, 500, function(v)
+local walkCtl, walkApply = createSlider(moveBox, "Walk Speed", 100, 1100, 500, function(v)
     AutoSteal.MoveSpeed = v
 end)
-local flyCtl, flyApply = createSlider(moveBox, "Fly Speed", 100, 1500, 800, function(v)
+local flyCtl, flyApply = createSlider(moveBox, "Fly Speed", 100, 1100, 800, function(v)
     Fly.Speed = v
     AutoSteal.MoveSpeed = v
 end)
-local blinkCtl, blinkApply = createSlider(moveBox, "Blink Distance", 100, 1500, 100, function(v)
+local blinkCtl, blinkApply = createSlider(moveBox, "Blink Distance", 100, 1100, 100, function(v)
     AutoSteal.BlinkDistance = v
 end)
-local glideCtl, glideApply = createSlider(moveBox, "Glide Speed", 100, 1500, 800, function(v)
+local glideCtl, glideApply = createSlider(moveBox, "Glide Speed", 100, 1100, 800, function(v)
     Glide.Speed = v
     AutoSteal.MoveSpeed = v
 end)
@@ -3919,7 +3802,7 @@ SectionLabel(StealTab, "Anti-Clamp (serves steal speed)")
 createToggle(StealTab, "Speed Bypass", false, function(v)
     SpeedBypass:Toggle(v)
 end)
-local bypassCtl, bypassApply = createSlider(StealTab, "Bypass Speed", 100, 1500, 1500, function(v)
+local bypassCtl, bypassApply = createSlider(StealTab, "Bypass Speed", 100, 1100, 1100, function(v)
     SpeedBypass.WalkSpeed = v
 end)
 createDropdown(StealTab, "Anti-Clamp", { "Off", "Capped 500", "Uncapped" }, "Uncapped", function(v)
@@ -3930,16 +3813,16 @@ createDropdown(StealTab, "Anti-Clamp", { "Off", "Capped 500", "Uncapped" }, "Unc
         SpeedBypass:Toggle(true)
     end
 end)
-createDropdown(StealTab, "Speed Preset", { "Legit 100", "Fast 500", "Blatant 1000", "Insane 1500" }, "Fast 500", function(v)
+createDropdown(StealTab, "Speed Preset", { "Legit 100", "Fast 500", "Blatant 800", "Insane 1100" }, "Fast 500", function(v)
     local walk, fly, glide, blink, bypass = 100, 100, 100, 100, 500
     if v == "Legit 100" then
         walk, fly, glide, blink, bypass = 100, 100, 100, 100, 500
     elseif v == "Fast 500" then
-        walk, fly, glide, blink, bypass = 500, 500, 500, 300, 1000
-    elseif v == "Blatant 1000" then
-        walk, fly, glide, blink, bypass = 1000, 1000, 1000, 800, 1500
-    elseif v == "Insane 1500" then
-        walk, fly, glide, blink, bypass = 1500, 1500, 1500, 1500, 1500
+        walk, fly, glide, blink, bypass = 500, 500, 500, 300, 800
+    elseif v == "Blatant 800" then
+        walk, fly, glide, blink, bypass = 800, 800, 800, 600, 1100
+    elseif v == "Insane 1100" then
+        walk, fly, glide, blink, bypass = 1100, 1100, 1100, 1100, 1100
     end
     AutoSteal.MoveSpeed = walk
     Fly.Speed = fly
@@ -3957,19 +3840,9 @@ createDropdown(StealTab, "Speed Preset", { "Legit 100", "Fast 500", "Blatant 100
     end
 end)
 
-SectionLabel(StealTab, "Travel (manual jumps)")
-createDropdown(StealTab, "Location", { "Base", "Forest", "Lake", "Desert", "Custom" }, "Base", function(v)
-    Teleport.Location = v
-end)
-createTextbox(StealTab, "Custom X,Y,Z", "0,0,0", function(v)
-    Teleport.Custom = v
-end)
-createButton(StealTab, "Teleport", function()
-    Teleport:TeleportNow()
-end)
-
 -- Static egg-type picker: always visible, checked = steal only those,
 -- all unchecked = allow all. Discovery extras render below it.
+-- (Manual Travel jumps removed: teleport routing deleted with the module.)
 local eggTypeSetters = {}
 SectionLabel(StealTab, "Egg Types (unchecked = allow all)")
 local eggTypeBox = Instance.new("Frame")
@@ -4042,18 +3915,6 @@ rarityLayout.Padding = UDim.new(0, 4)
 rarityLayout.SortOrder = Enum.SortOrder.LayoutOrder
 rarityLayout.Parent = rarityBox
 
-SectionLabel(rarityPanel, "Mutation")
-local mutationBox = Instance.new("Frame")
-mutationBox.Name = "MutationBox"
-mutationBox.Size = UDim2.new(1, 0, 0, 0)
-mutationBox.AutomaticSize = Enum.AutomaticSize.Y
-mutationBox.BackgroundTransparency = 1
-mutationBox.Parent = rarityPanel
-local mutationLayout = Instance.new("UIListLayout")
-mutationLayout.Padding = UDim.new(0, 4)
-mutationLayout.SortOrder = Enum.SortOrder.LayoutOrder
-mutationLayout.Parent = mutationBox
-
 local function RebuildFilterBox(box, names, allow, skip)
     for _, c in ipairs(box:GetChildren()) do
         if c:IsA("Frame") or c.Name == "EmptyNote" then
@@ -4092,32 +3953,8 @@ end
 
 local function RebuildStealFilters()
     RebuildFilterBox(rarityBox, AutoSteal.DiscoveredRarities, AutoSteal.RarityAllow, AutoSteal.PinRarities)
-    RebuildFilterBox(mutationBox, AutoSteal.DiscoveredMutations, AutoSteal.MutationAllow, {})
 end
 
-createDropdown(StealTab, "Filter Preset", { "All", "Secrets Only", "Secret+Eternal+Divine", "Mythic+", "Custom" }, "All", function(v)
-    if v == "Custom" then
-        return
-    end
-    local want = {}
-    if v == "Secrets Only" then
-        want = { Secret = true }
-    elseif v == "Secret+Eternal+Divine" then
-        want = { Secret = true, Eternal = true, Divine = true }
-    elseif v == "Mythic+" then
-        want = { Mythic = true, Divine = true, Eternal = true, Secret = true, Cosmic = true }
-    end
-    AutoSteal.RarityAllow = {}
-    for _, en in ipairs(AutoSteal.PinRarities) do
-        local on = (want[en] == true)
-        AutoSteal.RarityAllow[en] = on and true or nil
-        if eggTypeSetters[en] then
-            pcall(eggTypeSetters[en], on)
-        end
-    end
-    RebuildStealFilters()
-    AutoSteal:RefreshPreview()
-end)
 createDropdown(StealTab, "Value Strategy", { "All Values", "Best Value Only" }, "All Values", function(v)
     AutoSteal.BestValueOnly = (v == "Best Value Only")
 end)
@@ -4128,7 +3965,6 @@ createButton(rarityPanel, "Refresh Filters", function()
 end)
 createButton(rarityPanel, "Reset Filters", function()
     AutoSteal.RarityAllow = {}
-    AutoSteal.MutationAllow = {}
     AutoSteal.AreaAllow = {}
     AutoSteal.MinValue = 0
     AutoSteal.MaxValue = 1000000000
@@ -4167,55 +4003,49 @@ UpdateStealVisibility = function()
     weightPanel.Visible = (mode == "Weight-Size")
 end
 UpdateStealVisibility()
-
-SectionLabel(StealTab, "Preview (matching eggs)")
-local previewLabel = Instance.new("TextLabel")
-previewLabel.Name = "StealPreview"
-previewLabel.Size = UDim2.new(1, 0, 0, 140)
-previewLabel.BackgroundColor3 = Theme.Panel
-previewLabel.BorderSizePixel = 0
-previewLabel.Text = "Press Refresh Preview."
-previewLabel.TextColor3 = Theme.Text
-previewLabel.Font = Enum.Font.Gotham
-previewLabel.TextSize = 13
-previewLabel.TextWrapped = true
-previewLabel.TextXAlignment = Enum.TextXAlignment.Left
-previewLabel.TextYAlignment = Enum.TextYAlignment.Top
-previewLabel.Parent = StealTab
-ApplyCorner(previewLabel, 8)
-ApplyStroke(previewLabel, Theme.Outline, 1)
-local previewPad = Instance.new("UIPadding")
-previewPad.PaddingTop = UDim.new(0, 8)
-previewPad.PaddingBottom = UDim.new(0, 8)
-previewPad.PaddingLeft = UDim.new(0, 8)
-previewPad.PaddingRight = UDim.new(0, 8)
-previewPad.Parent = previewLabel
-AutoSteal.PreviewLabel = previewLabel
-createButton(StealTab, "Refresh Preview", function()
-    AutoSteal:RefreshPreview()
-end)
+-- Hardened: a filter-build error must never blank later tabs.
 pcall(function()
-    AutoSteal:DiscoverFilters()
-end)
-RebuildStealFilters()
-pcall(function()
-    AutoSteal:RefreshPreview()
+    RebuildStealFilters()
 end)
 
 -- Tab 4: Treadmill (Auto Treadmill)
 SectionLabel(TreadmillTab, "Auto Treadmill")
-createDropdown(TreadmillTab, "Auto Treadmill", { "Off", "On" }, "Off", function(v)
-    AutoTreadmill:Toggle(v == "On")
+createToggle(TreadmillTab, "Auto Treadmill", false, function(v)
+    AutoTreadmill:Toggle(v)
 end)
+createSlider(TreadmillTab, "Stand Check", 0.5, 5, 1, function(v)
+    AutoTreadmill.StandInterval = v
+end)
+local treadmillStatus = Instance.new("TextLabel")
+treadmillStatus.Name = "TreadmillStatus"
+treadmillStatus.Size = UDim2.new(1, 0, 0, 28)
+treadmillStatus.BackgroundTransparency = 1
+treadmillStatus.Text = "Pad: not locked — press Find."
+treadmillStatus.TextColor3 = Theme.TextDim
+treadmillStatus.Font = Enum.Font.Gotham
+treadmillStatus.TextSize = 13
+treadmillStatus.TextXAlignment = Enum.TextXAlignment.Left
+treadmillStatus.Parent = TreadmillTab
+AutoTreadmill.StatusLabel = treadmillStatus
 createButton(TreadmillTab, "Find Treadmill Pad", function()
     local cf = AutoTreadmill:FindTreadmill()
     if cf then
         AutoTreadmill.TreadmillCF = cf
+        pcall(function()
+            if AutoTreadmill.StatusLabel then
+                AutoTreadmill.StatusLabel.Text = "Pad: locked, ready."
+            end
+        end)
         if Notify then
             Notify("Treadmill pad locked")
         end
     else
         warn("[Quantum Hub] Treadmill pad not found")
+        pcall(function()
+            if AutoTreadmill.StatusLabel then
+                AutoTreadmill.StatusLabel.Text = "Pad: not found."
+            end
+        end)
         if Notify then
             Notify("Treadmill pad not found")
         end
@@ -4231,8 +4061,8 @@ pcall(function()
     AntiAFK:Toggle(true)
 end)
 SectionLabel(MiscTab, "Protection")
-createDropdown(MiscTab, "Anti-Trap", { "Off", "On" }, "Off", function(v)
-    AntiTrap:Toggle(v == "On")
+createToggle(MiscTab, "Anti-Trap", false, function(v)
+    AntiTrap:Toggle(v)
 end)
 SectionLabel(MiscTab, "Client Graphics (reversible)")
 createDropdown(MiscTab, "Graphics", { "Normal", "Low", "Ultra Low" }, "Normal", function(v)
