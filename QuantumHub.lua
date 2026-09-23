@@ -3731,7 +3731,7 @@ end)
 createToggle(MainTab, "No Knockback", false, function(v)
     NoKnockback:Toggle(v)
 end)
-createToggle(MainTab, "Instant Interact", true, function(v)
+createToggle(MainTab, "Instant Interact", false, function(v)
     InstantInteract:Toggle(v)
 end)
 
@@ -3888,9 +3888,8 @@ createButton(StealTab, "Stop Current Steal", function()
         Notify("Steal stopped")
     end
 end)
-pcall(function()
-    InstantInteract:Toggle(true)
-end)
+-- Safe Boot: nothing enables itself. Instant pickup stays OFF until you
+-- pick it (Steal Pickup dropdown or the Main toggle below).
 -- Forward declarations: visibility updaters are defined after the panels.
 local UpdateStealVisibility, UpdateMovementBox
 createDropdown(StealTab, "Steal On", { "Rarity", "Best Value", "Weight-Size" }, "Rarity", function(v)
@@ -4276,14 +4275,10 @@ AutoSteal.PreviewLabel = previewLabel
 createButton(StealTab, "Refresh Preview", function()
     AutoSteal:RefreshPreview()
 end)
-pcall(function()
-    AutoSteal:DiscoverFilters()
-end)
+-- Safe Boot: no game reads at load. Boxes render EmptyNote until you
+-- press Refresh Filters (or enable Auto Steal, which discovers).
 pcall(function()
     RebuildStealFilters()
-end)
-pcall(function()
-    AutoSteal:RefreshPreview()
 end)
 
 -- Tab 4: Treadmill (Auto Treadmill)
@@ -4332,11 +4327,8 @@ end)
 
 -- Tab 5: Misc
 SectionLabel(MiscTab, "Session")
-createToggle(MiscTab, "Anti AFK", true, function(v)
+createToggle(MiscTab, "Anti AFK", false, function(v)
     AntiAFK:Toggle(v)
-end)
-pcall(function()
-    AntiAFK:Toggle(true)
 end)
 SectionLabel(MiscTab, "Protection")
 createToggle(MiscTab, "Anti-Trap", false, function(v)
@@ -4436,11 +4428,17 @@ task.spawn(function()
     end
 end)
 
--- Secret / Eternal / Divine field notifier every 1.5s (edge-triggered).
+-- Secret / Eternal / Divine field notifier (edge-triggered). Starts
+-- reading only once Auto Steal has been enabled at least once.
 task.spawn(function()
     local lastCount = 0
+    local wasArmed = false
     while true do
         task.wait(1.5)
+        if not AutoSteal.Enabled and not wasArmed then
+            continue
+        end
+        wasArmed = true
         pcall(function()
             AutoSteal:EnsureData()
             if not AutoSteal.EggState then
