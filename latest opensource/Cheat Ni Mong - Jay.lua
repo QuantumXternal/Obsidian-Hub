@@ -727,7 +727,7 @@ o4=function(...)
     end
     return h.glideSpeed or 350
 end
-V4=function(e,y,...) y=y or 8 if _G.CNMJ_Pad and _G.CNMJ_Pad.Parent then _G.CNMJ_Pad.Position =e-Vector3.new ( 0 , 3.2 , 0 ) return _G.CNMJ_Pad end local u=Instance.new ( "Part" )u.Name = "CNMJ_SafetyPad" u.Size =Vector3.new ( 28 , 1.5 , 28 )u.Position =e-Vector3.new ( 0 , 3.2 , 0 )u.Anchored = true u.Transparency = 1 u.CanCollide = true u.Parent =r _G.CNMJ_Pad =u task.delay (y,function(...) pcall(function(...) if _G.CNMJ_Pad ==u then _G.CNMJ_Pad =nil end u:Destroy() end) end) return u end
+V4=function(e,y,...) y=y or 8 if _G.CNMJ_Pad and _G.CNMJ_Pad.Parent then _G.CNMJ_Pad.Position =e-Vector3.new ((math.random ()- 0.5 )* 2 , 3.0+math.random ()* 0.8 ,(math.random ()- 0.5 )* 2 ) return _G.CNMJ_Pad end local u=Instance.new ( "Part" )u.Name = "CNMJ_Pad"..tostring(math.random (1000,9999)) u.Size =Vector3.new ( 26+math.random ()* 6 , 1.5 , 26+math.random ()* 6 )u.Position =e-Vector3.new ((math.random ()- 0.5 )* 2 , 3.0+math.random ()* 0.8 ,(math.random ()- 0.5 )* 2 )u.Anchored = true u.Transparency = 1 u.CanCollide = true u.Parent =r _G.CNMJ_Pad =u task.delay (y,function(...) pcall(function(...) if _G.CNMJ_Pad ==u then _G.CNMJ_Pad =nil end u:Destroy() end) end) return u end
 H4=function(e,...)
     if P and e then
         pcall(function(...)
@@ -1561,13 +1561,10 @@ g4=function(e,r,u,...)
     if not j then
         return false
     end
-    if k then
-        k.AutoRotate = true
-    end
-    local a=s4()a=Vector3.new (a.X ,math.clamp (h.returnHeight or 70 , 10 , 100 ),a.Z )e=math.max ( 100 ,e or h.glideSpeed or 600 )
+    if k then k.AutoRotate = false end local a=s4()a=Vector3.new (a.X ,math.clamp ((h.returnHeight or 70 )+math.random (- 3 , 3 ), 10 , 100 ),a.Z )e=math.max ( 100 ,e or h.glideSpeed or 600 )
     local V=h.laneZ or L h.isReturning = true h.stateTime =os.clock ()V4(a, 20 )j.AssemblyLinearVelocity =Vector3.zero j.AssemblyAngularVelocity =Vector3.zero
     local H=o4()
-    local t=math.max (e,H) local oldWS=k and k.WalkSpeed or 16 if k then k.WalkSpeed =t h.wsBoost = true end
+    local t=math.max (e,H)
     local s=os.clock ()+ 25
     while h.alive and(h.isReturning and os.clock ()<s)do
         if r and O4~=r then
@@ -1589,7 +1586,7 @@ g4=function(e,r,u,...)
         if(e.X <=(a.X + 3 )and math.abs (e.Z -a.Z )<= 8 )or w<= 6 then
             break
         end
-        local o=y.Heartbeat :Wait()e=j.Position
+        local o=y.Heartbeat :Wait()task.wait (math.random ()* 0.01 )e=j.Position
         local H=t
         if e.X <=b and e.X >E then
             local r=math.clamp (((e.X -E))/((b-E)), 0 , 1 )H=A+(((t-A))*r)
@@ -1628,14 +1625,14 @@ g4=function(e,r,u,...)
             end
         end
         local U=Vector3.new (K,i,Q)
-        local l=((U-e)).Magnitude > 0.05 and((U-e)).Unit or j.CFrame.LookVector j.CFrame =CFrame.lookAt (U,U+l)j.AssemblyLinearVelocity =((U-e)/math.max (o, 0.001 ))* 0.85 j.AssemblyAngularVelocity =Vector3.zero
+        local l=((U-e)).Magnitude > 0.05 and((U-e)).Unit or j.CFrame.LookVector j.CFrame =CFrame.lookAt (U,U+l)j.AssemblyLinearVelocity =Vector3.zero j.AssemblyAngularVelocity =Vector3.zero
         if N then
             h.statusText =string.format ( "Tweening Home (Z: %.0f) [DODGING TRAP!]" ,Q)
         else
             h.statusText =string.format ( "Tweening Home (%.0f studs | Z: %.0f | Spd: %.0f)" ,w,Q,H)
         end
     end
-    j.CFrame =CFrame.new (a)j.AssemblyLinearVelocity =Vector3.zero j.AssemblyAngularVelocity =Vector3.zero
+    j.CFrame =CFrame.new (a+Vector3.new (math.random (- 1 , 1 ),math.random (- 1 , 1 ),math.random (- 1 , 1 )))j.AssemblyLinearVelocity =Vector3.zero j.AssemblyAngularVelocity =Vector3.zero
     if k then
         k.AutoRotate = true
     end
@@ -1721,11 +1718,8 @@ local function wk(e,r,u,w,...)
     if not k then
         return false
     end
-    if a then
-        a.AutoRotate = true
-    end
-    r=math.max ( 60 ,r or h.glideSpeed or 350 ) local oldWS=a and a.WalkSpeed or 16 if a then a.WalkSpeed =r h.wsBoost = true end
-    local V=e.Position V4(V, 14 )pcall(function(...) RS(V)
+    if a then a.AutoRotate = false end r=math.max ( 60 ,r or h.glideSpeed or 350 )
+    local V=e.Position V4(V, 14 )pcall(function(...) o:RequestStreamAroundAsync(V)
     end
     )k.AssemblyLinearVelocity =Vector3.zero k.AssemblyAngularVelocity =Vector3.zero
     local H=h.laneZ or L h.glidingToTarget = true h.stateTime =os.clock ()
@@ -1753,7 +1747,7 @@ local function wk(e,r,u,w,...)
         if j<= 6 or(o<= 3.5 and s<= 6 )then
             break
         end
-        local B=y.Heartbeat :Wait()e=k.Position j=((V-e)).Magnitude o=((Vector2.new (e.X ,e.Z )-Vector2.new (V.X ,V.Z ))).Magnitude
+        local B=y.Heartbeat :Wait()task.wait (math.random ()* 0.01 )e=k.Position j=((V-e)).Magnitude o=((Vector2.new (e.X ,e.Z )-Vector2.new (V.X ,V.Z ))).Magnitude
         local J=math.abs (e.X -V.X )
         if u and(os.clock ()-t> 0.5 )then
             t=os.clock ()
@@ -1799,14 +1793,14 @@ local function wk(e,r,u,w,...)
             end
         end
         local C=Vector3.new (i,P,l)
-        local q=((C-e)).Magnitude > 0.05 and((C-e)).Unit or k.CFrame.LookVector k.CFrame =CFrame.lookAt (C,C+q)k.AssemblyLinearVelocity =((C-e)/math.max (B, 0.001 ))* 0.85 k.AssemblyAngularVelocity =Vector3.zero
+        local q=((C-e)).Magnitude > 0.05 and((C-e)).Unit or k.CFrame.LookVector k.CFrame =CFrame.lookAt (C,C+q)k.AssemblyLinearVelocity =Vector3.zero k.AssemblyAngularVelocity =Vector3.zero
         if D then
             h.statusText =string.format ( "Gliding Out (Z: %.0f) [DODGING TRAP!]" ,l)
         else
             h.statusText =string.format ( "Gliding -> Egg (%.0f studs | H: %.0f)" ,j,o)
         end
     end
-    k.CFrame =e*CFrame.new ( 0 , 0.4 , 0 )k.AssemblyLinearVelocity =Vector3.zero k.AssemblyAngularVelocity =Vector3.zero
+    k.CFrame =(e+Vector3.new (math.random (- 1 , 1 ), 0 ,math.random (- 1 , 1 )))*CFrame.new ( 0 , 0.4 , 0 )k.AssemblyLinearVelocity =Vector3.zero k.AssemblyAngularVelocity =Vector3.zero
     if a then
         a.AutoRotate = true
     end
@@ -1841,13 +1835,10 @@ Q4=function(e,r,...)
     if not w then
         return false
     end
-    if j then
-        j.AutoRotate = true
-    end
-    local k=h.laneZ or L
-    local a=Vector3.new (E- 10 ,math.clamp (h.returnHeight or 70 , 10 , 100 ),k)e=math.max ( 100 ,e or h.glideSpeed or 350 )h.isReturning = true h.stateTime =os.clock ()V4(Vector3.new (E,math.clamp (h.returnHeight or 70 , 10 , 100 ),k), 20 )pcall(u4)w.AssemblyLinearVelocity =Vector3.zero w.AssemblyAngularVelocity =Vector3.zero
+    if j then j.AutoRotate = false end local k=h.laneZ or L
+    local a=Vector3.new (E- 10 ,math.clamp ((h.returnHeight or 70 )+math.random (- 3 , 3 ), 10 , 100 ),k)e=math.max ( 100 ,e or h.glideSpeed or 350 )h.isReturning = true h.stateTime =os.clock ()V4(Vector3.new (E,math.clamp ((h.returnHeight or 70 )+math.random (- 3 , 3 ), 10 , 100 ),k), 20 )pcall(u4)w.AssemblyLinearVelocity =Vector3.zero w.AssemblyAngularVelocity =Vector3.zero
     local V=o4()
-    local H=math.max (e,V) local oldWS=j and j.WalkSpeed or 16 if j then j.WalkSpeed =H h.wsBoost = true end
+    local H=math.max (e,V)
     local s=os.clock ()+ 15
     while h.alive and(h.isReturning and os.clock ()<s)do
         if r and O4~=r then
@@ -1880,7 +1871,7 @@ Q4=function(e,r,...)
                 end
             end
         end
-        local V=y.Heartbeat :Wait()e=w.Position
+        local V=y.Heartbeat :Wait()task.wait (math.random ()* 0.01 )e=w.Position
         local s=H
         if e.X <=b and e.X >E then
             local r=math.clamp (((e.X -E))/((b-E)), 0 , 1 )s=A+(((H-A))*r)
@@ -1913,14 +1904,14 @@ Q4=function(e,r,...)
             end
         end
         local U=Vector3.new (K,i,Q)
-        local l=((U-e)).Magnitude > 0.05 and((U-e)).Unit or w.CFrame.LookVector w.CFrame =CFrame.lookAt (U,U+l)w.AssemblyLinearVelocity =((U-e)/math.max (V, 0.001 ))* 0.85 w.AssemblyAngularVelocity =Vector3.zero
+        local l=((U-e)).Magnitude > 0.05 and((U-e)).Unit or w.CFrame.LookVector w.CFrame =CFrame.lookAt (U,U+l)w.AssemblyLinearVelocity =Vector3.zero w.AssemblyAngularVelocity =Vector3.zero
         if N then
             h.statusText =string.format ( "Tweening Safe Line (Z: %.0f) [DODGING!]" ,Q)
         else
             h.statusText =string.format ( "Tweening to Safe Line (%.0f studs | X: %.0f)" ,o,e.X )
         end
     end
-    w.CFrame =CFrame.new (E,math.max ( 68 ,w.Position.Y ),k)w.AssemblyLinearVelocity =Vector3.zero w.AssemblyAngularVelocity =Vector3.zero
+    w.CFrame =CFrame.new (E+math.random (- 1 , 1 ),math.max ( 68 ,w.Position.Y ),k+math.random (- 1 , 1 ))w.AssemblyLinearVelocity =Vector3.zero w.AssemblyAngularVelocity =Vector3.zero
     if j then
         j.AutoRotate = true
     end
@@ -3142,7 +3133,7 @@ U4=function(e,u,w,j,...)
         return false
     end
     h.securingEgg = true h.isReturning = false h.stateTime =os.clock ()h.holdingEggForGuard = true
-    local s=u.Position V4(s, 14 )h.currentTargetModel =w h.targetPosition =s a.AssemblyLinearVelocity =Vector3.zero a.AssemblyAngularVelocity =Vector3.zero Z4(k)pcall(function(...) RS(s)
+    local s=u.Position V4(s, 14 )h.currentTargetModel =w h.targetPosition =s a.AssemblyLinearVelocity =Vector3.zero a.AssemblyAngularVelocity =Vector3.zero Z4(k)pcall(function(...) o:RequestStreamAroundAsync(s)
     end
     )
     if not w and r:FindFirstChild( "AreaEggSlotsClient" )then
@@ -3320,7 +3311,7 @@ l4=function(e,u,...)
         end
         h.currentTargetModel =e.Model h.targetPosition =e.Position
         local r=((j.Position -e.Position )).Magnitude
-        local w=e.CFrame *CFrame.new ( 0 , 0.4 , 0 )pcall(function(...) RS(e.Position )
+        local w=e.CFrame *CFrame.new ( 0 , 0.4 , 0 )pcall(function(...) o:RequestStreamAroundAsync(e.Position )
         end
         )V4(e.Position , 8 )
         if r> 60 then
@@ -3331,7 +3322,7 @@ l4=function(e,u,...)
                 return false
             end
         else
-            h.statusText = "[2/7] Aligning with Lake Egg..." j.CFrame =w j.AssemblyLinearVelocity =Vector3.zero task.wait ( 0.10 +math.random ()* 0.08 )
+            h.statusText = "[2/7] Aligning with Lake Egg..." j.CFrame =w j.AssemblyLinearVelocity =Vector3.zero task.wait ( 0.04 )
         end
         j.Anchored = true task.wait ( 0.06 )j.Anchored = false h.holdingEggForGuard = true
         local k=os.clock ()+ 3
@@ -3365,10 +3356,10 @@ l4=function(e,u,...)
             return false
         end
     end
-    h.statusText = "[3/7] Pre-streaming Target..." pcall(function(...) RS(H)
+    h.statusText = "[3/7] Pre-streaming Target..." pcall(function(...) o:RequestStreamAroundAsync(H)
     end
     )V4(H, 12 )h.statusText = "[4/7] Waiting for physical bounce..." j.Anchored = false k:ChangeState(Enum.HumanoidStateType.Running )
-    local p=(k.WalkSpeed > 0 )and k.WalkSpeed or 16 k.WalkSpeed = 0 k:Move(Vector3.zero , false )j.AssemblyLinearVelocity =Vector3.zero j.AssemblyAngularVelocity =Vector3.zero task.wait ( 0.10 +math.random ()* 0.08 )
+    local p=(k.WalkSpeed > 0 )and k.WalkSpeed or 16 k.WalkSpeed = 0 k:Move(Vector3.zero , false )j.AssemblyLinearVelocity =Vector3.zero j.AssemblyAngularVelocity =Vector3.zero task.wait ( 0.04 )
     local B=j.Position
     local J=B.Y
     local K=select( 2 ,e4())or s
@@ -3464,7 +3455,7 @@ l4=function(e,u,...)
         return true
     end
 end
-h.decoyDone=false h.mainTargetCache=nil h.decoyFailCount=h.decoyFailCount or {} local function GetNearestEgg() local hr=o.Character and o.Character:FindFirstChild("HumanoidRootPart") if not hr then return nil end local best,bd=nil,1e9 local es=h4(false) if not es or #es==0 then es=h4(true) end if not es then return nil end for _,rec in ipairs(es) do local st=rec.State if st=="Slot" or st=="Dropped" or st==1 then if rec.BoundsCFrame then local pos=rec.BoundsCFrame.Position if pos.X>=530 and not string.find(tostring(rec.Uid),"FirstArea") then if not (X4[rec.Uid] and os.clock()<X4[rec.Uid]) then local d=(hr.Position-pos).Magnitude if d<bd then bd=d best={Uid=rec.Uid,CFrame=rec.BoundsCFrame,Position=pos,Distance=d,Model=rec.PhysicalModel} end end end end end end return best end local lastRagScan=0 local lastRagScanRes=false local function IsRagdolled() local ch=o.Character local hu=ch and ch:FindFirstChildOfClass("Humanoid") if not hu then return false end local st=nil pcall(function() st=hu:GetState() end) if st==Enum.HumanoidStateType.Ragdoll or st==Enum.HumanoidStateType.Physics or st==Enum.HumanoidStateType.FallingDown then return true end if hu.PlatformStand then return true end if ch and os.clock()-lastRagScan>0.5 then lastRagScan=os.clock() lastRagScanRes=false for _,d in ipairs(ch:GetDescendants()) do if d:IsA("BallSocketConstraint") or d:IsA("HingeConstraint") then lastRagScanRes=true break end end end if lastRagScanRes then return true end return false end local function WaitForRagdoll(tm,sid) local t0=os.clock() tm=tm or 10 while os.clock()-t0<tm and h.alive do if sid and O4~=sid then return false end if not h.pureTweenFarm and not h.autoFarmLoop then return false end if IsRagdolled() then return true end task.wait(0.15) end return false end local function DecoyMainTarget(mode) local sid=O4 local now=os.clock() local main=nil if h.decoyN4Cache and h.decoyN4CacheT and now-h.decoyN4T<0.5 and h.decoyN4Cache.Uid then main=h.decoyN4Cache else pcall(function() main=N4() end) h.decoyN4Cache=main h.decoyN4T=now end if not main or not main.Uid then task.wait(0.25) return nil end local fails=(h.decoyFailCount and h.decoyFailCount[main.Uid]) or 0 if fails>=5 then h.decoyFailCount[main.Uid]=0 h.decoyDone=false h.mainTargetCache=nil end if h.decoyDone and h.mainTargetCache and h.mainTargetCache.Uid==main.Uid then return main end local decoy=nil pcall(function() decoy=GetNearestEgg() end) if not decoy or not decoy.Uid or decoy.Uid==main.Uid then h.decoyDone=true h.mainTargetCache=main return main end h.statusText=string.format("[Decoy] Grabbing nearest before main...") local ok=false if mode=="WARP" then local ch=o.Character local hr=ch and ch:FindFirstChild("HumanoidRootPart") if hr then pcall(function() RS(decoy.Position) end) V4(decoy.Position,8) pcall(function() ch:PivotTo(decoy.CFrame*CFrame.new(0,0.4,0)) end) local t1=os.clock()+2.5 while not w4(decoy.Uid) and os.clock()<t1 and h.alive do if sid and O4~=sid then break end pcall(function() d4(decoy.Model,decoy.Position) end) if i then pcall(function() if i:IsA("RemoteFunction") then i:InvokeServer({["Uid"]=decoy.Uid}) else i:FireServer({["Uid"]=decoy.Uid}) end end) end task.wait(0.2) end ok=w4(decoy.Uid) end else local rr=R4(decoy.CFrame*CFrame.new(0,0.4,0),h.glideSpeed,decoy.Uid,sid) if rr then local t1=os.clock()+2.5 while not w4(decoy.Uid) and os.clock()<t1 and h.alive do if sid and O4~=sid then break end pcall(function() d4(decoy.Model,decoy.Position) end) if i then pcall(function() if i:IsA("RemoteFunction") then i:InvokeServer({["Uid"]=decoy.Uid}) else i:FireServer({["Uid"]=decoy.Uid}) end end) end task.wait(0.2) end ok=w4(decoy.Uid) end end if not ok then X4[decoy.Uid]=os.clock()+2 return nil end h.statusText="[Decoy] Dropping decoy..." local t2=os.clock()+1.5 pcall(function(...) InstantDropHeldEgg(decoy.Uid, 0.8) end) while w4(decoy.Uid) and os.clock()<t2 and h.alive do if sid and O4~=sid then return nil end pcall(u4) task.wait(0.12) end if not w4(decoy.Uid) then h.decoyDone=true h.mainTargetCache=main H("[Decoy] Dropped, switching to MAIN "..tostring(main.Uid)) return main end h.statusText="[Decoy] Drop failed, waiting ragdoll..." if WaitForRagdoll(10,sid) then pcall(u4) task.wait(0.15) pcall(u4) h.decoyDone=true h.mainTargetCache=main H("[Decoy] Ragdoll trigger, switching to MAIN "..tostring(main.Uid)) return main end X4[decoy.Uid]=os.clock()+2 return nil end T4=function(e,...)
+h.decoyDone=false h.mainTargetCache=nil h.decoyFailCount=h.decoyFailCount or {} local function GetNearestEgg() local hr=o.Character and o.Character:FindFirstChild("HumanoidRootPart") if not hr then return nil end local best,bd=nil,1e9 local es=h4(false) if not es or #es==0 then es=h4(true) end if not es then return nil end for _,rec in ipairs(es) do local st=rec.State if st=="Slot" or st=="Dropped" or st==1 then if rec.BoundsCFrame then local pos=rec.BoundsCFrame.Position if pos.X>=530 and not string.find(tostring(rec.Uid),"FirstArea") then if not (X4[rec.Uid] and os.clock()<X4[rec.Uid]) then local d=(hr.Position-pos).Magnitude if d<bd then bd=d best={Uid=rec.Uid,CFrame=rec.BoundsCFrame,Position=pos,Distance=d,Model=rec.PhysicalModel} end end end end end end return best end local lastRagScan=0 local lastRagScanRes=false local function IsRagdolled() local ch=o.Character local hu=ch and ch:FindFirstChildOfClass("Humanoid") if not hu then return false end local st=nil pcall(function() st=hu:GetState() end) if st==Enum.HumanoidStateType.Ragdoll or st==Enum.HumanoidStateType.Physics or st==Enum.HumanoidStateType.FallingDown then return true end if hu.PlatformStand then return true end if ch and os.clock()-lastRagScan>0.5 then lastRagScan=os.clock() lastRagScanRes=false for _,d in ipairs(ch:GetDescendants()) do if d:IsA("BallSocketConstraint") or d:IsA("HingeConstraint") then lastRagScanRes=true break end end end if lastRagScanRes then return true end return false end local function WaitForRagdoll(tm,sid) local t0=os.clock() tm=tm or 10 while os.clock()-t0<tm and h.alive do if sid and O4~=sid then return false end if not h.pureTweenFarm and not h.autoFarmLoop then return false end if IsRagdolled() then return true end task.wait(0.15) end return false end local function DecoyMainTarget(mode) local sid=O4 local now=os.clock() local main=nil if h.decoyN4Cache and h.decoyN4CacheT and now-h.decoyN4T<0.5 and h.decoyN4Cache.Uid then main=h.decoyN4Cache else pcall(function() main=N4() end) h.decoyN4Cache=main h.decoyN4T=now end if not main or not main.Uid then task.wait(0.25) return nil end local fails=(h.decoyFailCount and h.decoyFailCount[main.Uid]) or 0 if fails>=5 then h.decoyFailCount[main.Uid]=0 h.decoyDone=false h.mainTargetCache=nil end if h.decoyDone and h.mainTargetCache and h.mainTargetCache.Uid==main.Uid then return main end local decoy=nil pcall(function() decoy=GetNearestEgg() end) if not decoy or not decoy.Uid or decoy.Uid==main.Uid then h.decoyDone=true h.mainTargetCache=main return main end h.statusText=string.format("[Decoy] Grabbing nearest before main...") local ok=false if mode=="WARP" then local ch=o.Character local hr=ch and ch:FindFirstChild("HumanoidRootPart") if hr then pcall(function() o:RequestStreamAroundAsync(decoy.Position) end) V4(decoy.Position,8) pcall(function() ch:PivotTo(decoy.CFrame*CFrame.new(0,0.4,0)) end) local t1=os.clock()+2.5 while not w4(decoy.Uid) and os.clock()<t1 and h.alive do if sid and O4~=sid then break end pcall(function() d4(decoy.Model,decoy.Position) end) if i then pcall(function() if i:IsA("RemoteFunction") then i:InvokeServer({["Uid"]=decoy.Uid}) else i:FireServer({["Uid"]=decoy.Uid}) end end) end task.wait(0.2) end ok=w4(decoy.Uid) end else local rr=R4(decoy.CFrame*CFrame.new(0,0.4,0),h.glideSpeed,decoy.Uid,sid) if rr then local t1=os.clock()+2.5 while not w4(decoy.Uid) and os.clock()<t1 and h.alive do if sid and O4~=sid then break end pcall(function() d4(decoy.Model,decoy.Position) end) if i then pcall(function() if i:IsA("RemoteFunction") then i:InvokeServer({["Uid"]=decoy.Uid}) else i:FireServer({["Uid"]=decoy.Uid}) end end) end task.wait(0.2) end ok=w4(decoy.Uid) end end if not ok then X4[decoy.Uid]=os.clock()+2 return nil end h.statusText="[Decoy] Dropping decoy..." local t2=os.clock()+1.5 pcall(function(...) InstantDropHeldEgg(decoy.Uid, 0.8) end) while w4(decoy.Uid) and os.clock()<t2 and h.alive do if sid and O4~=sid then return nil end pcall(u4) task.wait(0.12) end if not w4(decoy.Uid) then h.decoyDone=true h.mainTargetCache=main H("[Decoy] Dropped, switching to MAIN "..tostring(main.Uid)) return main end h.statusText="[Decoy] Drop failed, waiting ragdoll..." if WaitForRagdoll(3,sid) then pcall(u4) task.wait(0.15) pcall(u4) h.decoyDone=true h.mainTargetCache=main H("[Decoy] Ragdoll trigger, switching to MAIN "..tostring(main.Uid)) return main end X4[decoy.Uid]=os.clock()+2 return nil end T4=function(e,...)
     if Y4==e then
         return
     end
@@ -3540,7 +3531,7 @@ local Ck=os.clock ()task.spawn (function(...)
                             if not h.godmode then
                                 b4( true )
                             end
-                            Z4(r)pcall(function(...) RS(w.Position )
+                            Z4(r)pcall(function(...) o:RequestStreamAroundAsync(w.Position )
                             end
                             )
                             local V=w.CFrame *CFrame.new ( 0 , 0.4 , 0 )
@@ -3858,7 +3849,7 @@ local lastHU4=0 y.Heartbeat :Connect(function(...)
     local y=e and e:FindFirstChildOfClass( "Humanoid" )
     if not r then
         return
-    end if h.wsBoost and not (h.isReturning or h.glidingToTarget) then h.wsBoost = false local ch2=o.Character local hu2=ch2 and ch2:FindFirstChildOfClass("Humanoid") if hu2 then hu2.WalkSpeed = 16 end end
+    end 
     if y and not((h and h.onTreadmill ))then
         if y.PlatformStand then
             y.PlatformStand = false y:ChangeState(Enum.HumanoidStateType.Running )
