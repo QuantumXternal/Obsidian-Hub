@@ -206,7 +206,7 @@ local function T(...)
         e={[ "selectedZones" ]=r;
         [ "selectedRarities" ]=y,[ "alwaysCollectSecretPlus" ]= true ,[ "minRarityTier" ]= 2 ;
         [ "autoTreadmill" ]= true ; [ "autoUpgradeTreadmill" ]= true ,[ "autoBuyTrails" ]= true ; [ "hideNotEnoughMoney" ]= true ;
-        [ "performanceMode" ]= false ,[ "disable3D" ]= false ,[ "antiAFK" ]= true ,[ "godmode" ]= false ,[ "antiKnockback" ]= false ,[ "antiTrap" ]= false ,[ "returnHeight" ]= 70 ,[ "language" ]= "EN" }
+        [ "performanceMode" ]= false ,[ "disable3D" ]= false ,[ "antiAFK" ]= true ,[ "godmode" ]= false ,[ "antiKnockback" ]= true ,[ "antiTrap" ]= true ,[ "returnHeight" ]= 70 ,[ "language" ]= "EN" }
     else
         if type(e.selectedZones )~= "table" then
             e.selectedZones =r
@@ -244,7 +244,7 @@ local function T(...)
         if e.disable3D ==nil then
             e.disable3D = false
         end
-        if e.antiAFK ==nil then e.antiAFK = true end if e.godmode ==nil then e.godmode = false end if e.antiKnockback ==nil then e.antiKnockback = false end if e.antiTrap ==nil then e.antiTrap = false end if e.returnHeight ==nil then e.returnHeight = 70 end
+        if e.antiAFK ==nil then e.antiAFK = true end if e.godmode ==nil then e.godmode = false end if e.antiKnockback ==nil then e.antiKnockback = true end if e.antiTrap ==nil then e.antiTrap = true end if e.returnHeight ==nil then e.returnHeight = 70 end
         if e.language and((e.language == "EN" or e.language == "TH" ))then
             currentLang=e.language
         end
@@ -285,8 +285,8 @@ local W=T()h={[ "godmode" ]=(W.godmode == true ),[ "autoGlide" ]= true ,[ "autoH
 [ "alive" ]= true ,[ "plot" ]=nil;
 [ "pen" ]=nil,[ "origin" ]=nil;
 [ "tread" ]=nil}
-_G.CNMJStream=_G.CNMJStream or 0
-local RS=function(v,...) if os.clock()-_G.CNMJStream>3 then _G.CNMJStream=os.clock() pcall(function(...) o:RequestStreamAroundAsync(v) end) end end
+
+
 local m
 local e4
 local r4
@@ -727,7 +727,14 @@ o4=function(...)
     end
     return h.glideSpeed or 350
 end
-V4=function(e,y,...) if not h.antiTrap then return nil end y=y or 8 if _G.CNMJ_Pad and _G.CNMJ_Pad.Parent then _G.CNMJ_Pad.Position =e-Vector3.new ((math.random ()- 0.5 )* 2 , 3.0+math.random ()* 0.8 ,(math.random ()- 0.5 )* 2 ) return _G.CNMJ_Pad end local u=Instance.new ( "Part" )u.Name = "CNMJ_Pad"..tostring(math.random (1000,9999)) u.Size =Vector3.new ( 26+math.random ()* 6 , 1.5 , 26+math.random ()* 6 )u.Position =e-Vector3.new ((math.random ()- 0.5 )* 2 , 3.0+math.random ()* 0.8 ,(math.random ()- 0.5 )* 2 )u.Anchored = true u.Transparency = 1 u.CanCollide = true u.Parent =r _G.CNMJ_Pad =u task.delay (y,function(...) pcall(function(...) if _G.CNMJ_Pad ==u then _G.CNMJ_Pad =nil end u:Destroy() end) end) return u end
+V4=function(e,y,...) y=y or 8
+    local u=Instance.new ( "Part" )u.Name = "SafetyFloorPad_AntiVoid" u.Size =Vector3.new ( 28 , 1.5 , 28 )u.Position =e-Vector3.new ( 0 , 3.2 , 0 )u.Anchored = true u.Transparency = 1 u.CanCollide = true u.Parent =r task.delay (y,function(...) pcall(function(...) u:Destroy()
+        end
+        )
+    end
+    )
+    return u
+end
 H4=function(e,...)
     if P and e then
         pcall(function(...)
@@ -1555,7 +1562,10 @@ g4=function(e,r,u,...)
     if not j then
         return false
     end
-    if k then k.AutoRotate = false end local a=s4()a=Vector3.new (a.X ,math.clamp ((h.returnHeight or 70 )+math.random (- 3 , 3 ), 10 , 100 ),a.Z )e=math.max ( 100 ,e or h.glideSpeed or 600 )
+    if k then
+        k.AutoRotate = false
+    end
+    local a=s4()e=math.max ( 100 ,e or h.glideSpeed or 600 )
     local V=h.laneZ or L h.isReturning = true h.stateTime =os.clock ()V4(a, 20 )j.AssemblyLinearVelocity =Vector3.zero j.AssemblyAngularVelocity =Vector3.zero
     local H=o4()
     local t=math.max (e,H)
@@ -1580,7 +1590,7 @@ g4=function(e,r,u,...)
         if(e.X <=(a.X + 3 )and math.abs (e.Z -a.Z )<= 8 )or w<= 6 then
             break
         end
-        local o=y.Heartbeat :Wait()task.wait (math.random ()* 0.01 )e=j.Position
+        local o=y.Heartbeat :Wait()e=j.Position
         local H=t
         if e.X <=b and e.X >E then
             local r=math.clamp (((e.X -E))/((b-E)), 0 , 1 )H=A+(((t-A))*r)
@@ -1600,7 +1610,7 @@ g4=function(e,r,u,...)
         local R=s-e.Z
         local g=math.sign (R)*math.min (math.abs (R),H*o)
         local Q=e.Z +g
-        local P=(h.antiTrap and i4()) or {}
+        local P=i4()
         local N= false
         if e.X >E then
             for e,r in ipairs(P)do
@@ -1626,7 +1636,7 @@ g4=function(e,r,u,...)
             h.statusText =string.format ( "Tweening Home (%.0f studs | Z: %.0f | Spd: %.0f)" ,w,Q,H)
         end
     end
-    j.CFrame =CFrame.new (a+Vector3.new (math.random (- 1 , 1 ),math.random (- 1 , 1 ),math.random (- 1 , 1 )))j.AssemblyLinearVelocity =Vector3.zero j.AssemblyAngularVelocity =Vector3.zero
+    j.CFrame =CFrame.new (a)j.AssemblyLinearVelocity =Vector3.zero j.AssemblyAngularVelocity =Vector3.zero
     if k then
         k.AutoRotate = true
     end
@@ -1712,7 +1722,10 @@ local function wk(e,r,u,w,...)
     if not k then
         return false
     end
-    if a then a.AutoRotate = false end r=math.max ( 60 ,r or h.glideSpeed or 350 )
+    if a then
+        a.AutoRotate = false
+    end
+    r=math.max ( 60 ,r or h.glideSpeed or 350 )
     local V=e.Position V4(V, 14 )pcall(function(...) o:RequestStreamAroundAsync(V)
     end
     )k.AssemblyLinearVelocity =Vector3.zero k.AssemblyAngularVelocity =Vector3.zero
@@ -1741,7 +1754,7 @@ local function wk(e,r,u,w,...)
         if j<= 6 or(o<= 3.5 and s<= 6 )then
             break
         end
-        local B=y.Heartbeat :Wait()task.wait (math.random ()* 0.01 )e=k.Position j=((V-e)).Magnitude o=((Vector2.new (e.X ,e.Z )-Vector2.new (V.X ,V.Z ))).Magnitude
+        local B=y.Heartbeat :Wait()e=k.Position j=((V-e)).Magnitude o=((Vector2.new (e.X ,e.Z )-Vector2.new (V.X ,V.Z ))).Magnitude
         local J=math.abs (e.X -V.X )
         if u and(os.clock ()-t> 0.5 )then
             t=os.clock ()
@@ -1770,7 +1783,7 @@ local function wk(e,r,u,w,...)
         local l=e.Z +U
         local D= false
         if o> 25 then
-            local e=(h.antiTrap and i4()) or {}
+            local e=i4()
             for e,y in ipairs(e)do
                 local u=y.Position
                 local w=((Vector3.new (i,P,l)-u)).Magnitude
@@ -1794,7 +1807,7 @@ local function wk(e,r,u,w,...)
             h.statusText =string.format ( "Gliding -> Egg (%.0f studs | H: %.0f)" ,j,o)
         end
     end
-    k.CFrame =(e+Vector3.new (math.random (- 1 , 1 ), 0 ,math.random (- 1 , 1 )))*CFrame.new ( 0 , 0.4 , 0 )k.AssemblyLinearVelocity =Vector3.zero k.AssemblyAngularVelocity =Vector3.zero
+    k.CFrame =e*CFrame.new ( 0 , 0.4 , 0 )k.AssemblyLinearVelocity =Vector3.zero k.AssemblyAngularVelocity =Vector3.zero
     if a then
         a.AutoRotate = true
     end
@@ -1816,7 +1829,7 @@ R4=function(e,r,y,u,...)
                 if not j then
                     return false
                 end
-                task.wait ( 0.10 +math.random ()* 0.08 )
+                task.wait ( 0.04 )
             end
         end
     end
@@ -1829,8 +1842,11 @@ Q4=function(e,r,...)
     if not w then
         return false
     end
-    if j then j.AutoRotate = false end local k=h.laneZ or L
-    local a=Vector3.new (E- 10 ,math.clamp ((h.returnHeight or 70 )+math.random (- 3 , 3 ), 10 , 100 ),k)e=math.max ( 100 ,e or h.glideSpeed or 350 )h.isReturning = true h.stateTime =os.clock ()V4(Vector3.new (E,math.clamp ((h.returnHeight or 70 )+math.random (- 3 , 3 ), 10 , 100 ),k), 20 )pcall(u4)w.AssemblyLinearVelocity =Vector3.zero w.AssemblyAngularVelocity =Vector3.zero
+    if j then
+        j.AutoRotate = false
+    end
+    local k=h.laneZ or L
+    local a=Vector3.new (E- 10 , 70 ,k)e=math.max ( 100 ,e or h.glideSpeed or 350 )h.isReturning = true h.stateTime =os.clock ()V4(Vector3.new (E, 70 ,k), 20 )pcall(u4)w.AssemblyLinearVelocity =Vector3.zero w.AssemblyAngularVelocity =Vector3.zero
     local V=o4()
     local H=math.max (e,V)
     local s=os.clock ()+ 15
@@ -1865,7 +1881,7 @@ Q4=function(e,r,...)
                 end
             end
         end
-        local V=y.Heartbeat :Wait()task.wait (math.random ()* 0.01 )e=w.Position
+        local V=y.Heartbeat :Wait()e=w.Position
         local s=H
         if e.X <=b and e.X >E then
             local r=math.clamp (((e.X -E))/((b-E)), 0 , 1 )s=A+(((H-A))*r)
@@ -1881,7 +1897,7 @@ Q4=function(e,r,...)
         local R=k-e.Z
         local g=math.sign (R)*math.min (math.abs (R),s*V)
         local Q=e.Z +g
-        local P=(h.antiTrap and i4()) or {}
+        local P=i4()
         local N= false
         for e,r in ipairs(P)do
             local y=r.Position
@@ -1905,7 +1921,7 @@ Q4=function(e,r,...)
             h.statusText =string.format ( "Tweening to Safe Line (%.0f studs | X: %.0f)" ,o,e.X )
         end
     end
-    w.CFrame =CFrame.new (E+math.random (- 1 , 1 ),math.max ( 68 ,w.Position.Y ),k+math.random (- 1 , 1 ))w.AssemblyLinearVelocity =Vector3.zero w.AssemblyAngularVelocity =Vector3.zero
+    w.CFrame =CFrame.new (E,math.max ( 68 ,w.Position.Y ),k)w.AssemblyLinearVelocity =Vector3.zero w.AssemblyAngularVelocity =Vector3.zero
     if j then
         j.AutoRotate = true
     end
@@ -3279,7 +3295,9 @@ l4=function(e,u,...)
     if not h.swapped then
         A4()
     end
-    
+    if not h.godmode then
+        b4( true )
+    end
     Z4(w)
     if not e then
         e=N4()
