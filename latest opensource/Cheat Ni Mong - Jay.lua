@@ -218,9 +218,7 @@ local function T(...)
                 if e.selectedRarities [w]==nil then
                     e.selectedRarities [w]=(y[w]== true )
                 end
-            end
-        end
-        if e.alwaysCollectSecretPlus ==nil then
+            end end do local nz,nr=0,0 for _,v in pairs(e.selectedZones or {}) do if v then nz=nz+1 end end for _,v in pairs(e.selectedRarities or {}) do if v then nr=nr+1 end end if nz==0 and nr==0 then e.selectedZones =r e.selectedRarities =y end end if e.alwaysCollectSecretPlus ==nil then
             e.alwaysCollectSecretPlus = true
         end
         if e.minRarityTier ==nil then
@@ -556,8 +554,7 @@ task.spawn (function(...)
         task.wait ( 1.5 )pcall(ek)
     end
 end
-)function h4(e,...)
-    local y=os.clock ()
+)function h4(e,...) local y=os.clock () if not e and h.h4cache and h.h4cacheT and y-h.h4cacheT<0.3 then return h.h4cache end
     if e or(y-G4>= 1.5 )or not F4 then
         ek()
     end
@@ -637,10 +634,7 @@ end
                 end
             end
         end
-    end
-    return j
-end
-k4=function(e,...)
+    end h.h4cache=j h.h4cacheT=os.clock () return j end k4=function(e,...)
     if not e then
         return false , "NoUid"
     end
@@ -727,14 +721,7 @@ o4=function(...)
     end
     return h.glideSpeed or 350
 end
-V4=function(e,y,...) y=y or 8
-    local u=Instance.new ( "Part" )u.Name = "SafetyFloorPad_AntiVoid" u.Size =Vector3.new ( 28 , 1.5 , 28 )u.Position =e-Vector3.new ( 0 , 3.2 , 0 )u.Anchored = true u.Transparency = 1 u.CanCollide = true u.Parent =r task.delay (y,function(...) pcall(function(...) u:Destroy()
-        end
-        )
-    end
-    )
-    return u
-end
+V4=function(e,y,...) if not h.antiTrap then return nil end y=y or 8 if _G.CNMJ_Pad and _G.CNMJ_Pad.Parent then _G.CNMJ_Pad.Position =e-Vector3.new ( 0 , 3.2 , 0 ) return _G.CNMJ_Pad end local u=Instance.new ( "Part" )u.Name = "CNMJ_SafetyPad" u.Size =Vector3.new ( 28 , 1.5 , 28 )u.Position =e-Vector3.new ( 0 , 3.2 , 0 )u.Anchored = true u.Transparency = 1 u.CanCollide = true u.Parent =r _G.CNMJ_Pad =u task.delay (y,function(...) pcall(function(...) if _G.CNMJ_Pad ==u then _G.CNMJ_Pad =nil end u:Destroy() end) end) return u end
 H4=function(e,...)
     if P and e then
         pcall(function(...)
@@ -3470,7 +3457,7 @@ h.decoyDone=false h.mainTargetCache=nil h.decoyFailCount=h.decoyFailCount or {} 
         return
     end
     O4=O4+ 1
-    local r=O4 Y4= "SWITCHING" h.pureTweenFarm = false h.autoFarmLoop = false pcall(D4)pcall(u4)
+    local r=O4 Y4= "SWITCHING" if (e=="TWEEN" or e=="WARP") and not (h.godmode or h.antiKnockback or h.antiTrap) and os.clock ()-(h.warnT or 0 )>30 then h.warnT =os.clock () H("[Farm] WARNING: all protections OFF - enable Godmode/AntiKnockback/AntiTrap in Character tab") end h.pureTweenFarm = false h.autoFarmLoop = false pcall(D4)pcall(u4)
     if e== "TWEEN" then
         if W4 then
             W4( false , true )
