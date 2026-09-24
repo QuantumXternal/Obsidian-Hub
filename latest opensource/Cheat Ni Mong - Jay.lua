@@ -206,7 +206,7 @@ local function T(...)
         e={[ "selectedZones" ]=r;
         [ "selectedRarities" ]=y,[ "alwaysCollectSecretPlus" ]= true ,[ "minRarityTier" ]= 2 ;
         [ "autoTreadmill" ]= true ; [ "autoUpgradeTreadmill" ]= true ,[ "autoBuyTrails" ]= true ; [ "hideNotEnoughMoney" ]= true ;
-        [ "performanceMode" ]= false ,[ "disable3D" ]= false ,[ "antiAFK" ]= true ,[ "godmode" ]= false ,[ "antiKnockback" ]= true ,[ "antiTrap" ]= true ,[ "returnHeight" ]= 70 ,[ "language" ]= "EN" }
+        [ "performanceMode" ]= false ,[ "disable3D" ]= false ,[ "antiAFK" ]= true ,[ "language" ]= "EN" }
     else
         if type(e.selectedZones )~= "table" then
             e.selectedZones =r
@@ -218,7 +218,7 @@ local function T(...)
                 if e.selectedRarities [w]==nil then
                     e.selectedRarities [w]=(y[w]== true )
                 end
-            end end do local nz,nr=0,0 for _,v in pairs(e.selectedZones or {}) do if v then nz=nz+1 end end for _,v in pairs(e.selectedRarities or {}) do if v then nr=nr+1 end end if nz==0 and nr==0 then e.selectedZones =r e.selectedRarities =y end end if e.alwaysCollectSecretPlus ==nil then
+            end end if e.alwaysCollectSecretPlus ==nil then
             e.alwaysCollectSecretPlus = true
         end
         if e.minRarityTier ==nil then
@@ -242,7 +242,7 @@ local function T(...)
         if e.disable3D ==nil then
             e.disable3D = false
         end
-        if e.antiAFK ==nil then e.antiAFK = true end if e.godmode ==nil then e.godmode = false end if e.antiKnockback ==nil then e.antiKnockback = true end if e.antiTrap ==nil then e.antiTrap = true end if e.returnHeight ==nil then e.returnHeight = 70 end
+        if e.antiAFK ==nil then e.antiAFK = true end    
         if e.language and((e.language == "EN" or e.language == "TH" ))then
             currentLang=e.language
         end
@@ -258,14 +258,14 @@ local function x(...) pcall(function(...)
             [ "hideNotEnoughMoney" ]=(h.hideNotEnoughMoney == true );
             [ "performanceMode" ]=(h.performanceMode == true );
             [ "disable3D" ]=(h.disable3D == true );
-            [ "antiAFK" ]=(h.antiAFK == true ),[ "godmode" ]=(h.godmode == true ),[ "antiKnockback" ]=(h.antiKnockback == true ),[ "antiTrap" ]=(h.antiTrap == true ),[ "returnHeight" ]=math.clamp (tonumber(h.returnHeight )or 70 , 10 , 100 );
+            [ "antiAFK" ]=(h.antiAFK == true );
             [ "language" ]=currentLang or "EN" }
             local y=a:JSONEncode(r)writefile(z,y)
         end
     end
     )
 end
-local W=T()h={[ "godmode" ]=(W.godmode == true ),[ "autoGlide" ]= true ,[ "autoHatch" ]= false ;
+local W=T()h={[ "godmode" ]= true ,[ "autoGlide" ]= true ,[ "autoHatch" ]= false ;
 [ "autoPlaceEvery5" ]= false ;
 [ "batchStealCount" ]= 0 ,[ "isBatchPlacing" ]= false ,[ "isHatching" ]= false ;
 [ "autoFarmLoop" ]= false ,[ "pureTweenFarm" ]= false ;
@@ -275,7 +275,7 @@ local W=T()h={[ "godmode" ]=(W.godmode == true ),[ "autoGlide" ]= true ,[ "autoH
 [ "selectedRarities" ]=W.selectedRarities ;
 [ "alwaysCollectSecretPlus" ]=W.alwaysCollectSecretPlus ,[ "minRarityTier" ]=W.minRarityTier ,[ "autoTreadmill" ]=(W.autoTreadmill ~= false );
 [ "autoUpgradeTreadmill" ]=(W.autoUpgradeTreadmill ~= false ),[ "autoBuyTrails" ]=(W.autoBuyTrails ~= false ),[ "hideNotEnoughMoney" ]=(W.hideNotEnoughMoney ~= false );
-[ "performanceMode" ]=(W.performanceMode == true ),[ "disable3D" ]=(W.disable3D == true ),[ "antiAFK" ]= true,[ "antiKnockback" ]=(W.antiKnockback == true ),[ "antiTrap" ]=(W.antiTrap == true ),[ "returnHeight" ]=W.returnHeight or 70 ,[ "onTreadmill" ]= false ,[ "lastTreadmillMount" ]= 0 ,[ "laneZ" ]= -360 ,[ "swapped" ]= false ;
+[ "performanceMode" ]=(W.performanceMode == true ),[ "disable3D" ]=(W.disable3D == true ),[ "antiAFK" ]= true ,[ "onTreadmill" ]= false ,[ "lastTreadmillMount" ]= 0 ,[ "laneZ" ]= -360 ,[ "swapped" ]= false ;
 [ "teleporting" ]= false ,[ "isReturning" ]= false ;
 [ "delivering" ]= false ,[ "holdingEggForGuard" ]= false ,[ "currentTargetModel" ]=nil,[ "targetPosition" ]=nil;
 [ "stateTime" ]=os.clock (),[ "statusText" ]= "Ready" ,[ "bestEggInfo" ]= "Scanning..." ;
@@ -439,8 +439,9 @@ u4=function(e,...)
         end
     end
 end
-local function InstantDropHeldEgg(uid, timeout) timeout =timeout or 0.6 local pg=o and o:FindFirstChild("PlayerGui") local btn=nil if pg then btn=pg:FindFirstChild("DropHeldEgg", true) end if btn and not btn:IsA("GuiButton") then btn=btn:FindFirstChildWhichIsA("GuiButton", true) end if btn and btn:IsA("GuiButton") then if typeof(firesignal)== "function" then if btn.Activated then pcall(function(...) firesignal(btn.Activated) end) elseif btn.MouseButton1Click then pcall(function(...) firesignal(btn.MouseButton1Click) end) end elseif typeof(getconnections)== "function" then local cs=nil pcall(function(...) cs=getconnections(btn.MouseButton1Click) end) if (not cs or #cs==0) then pcall(function(...) cs=getconnections(btn.Activated) end) end if cs then for _,c in ipairs(cs) do pcall(function(...) c:Fire() end) break end end else local vm=game:GetService("VirtualInputManager") pcall(function(...) local pos=btn.AbsolutePosition +btn.AbsoluteSize / 2 vm:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 0) task.wait ( 0.02 )vm:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 0) end) end end local t0=os.clock ()while ((uid and w4(uid)) or ((not uid) and w4())) and os.clock ()-t0<timeout and h.alive do task.wait ( 0.04 ) end if uid then return not w4(uid) else return not w4() end end w4=function(e,...)
-    if((h.pureTweenFarm or h.autoFarmLoop ))and not h.holdingEggForGuard and not e then local e=e4()
+w4=function(e,...)
+    if((h.pureTweenFarm or h.autoFarmLoop ))and not h.holdingEggForGuard then
+        local e=e4()
         if e then
             pcall(u4)
         end
@@ -554,7 +555,7 @@ task.spawn (function(...)
         task.wait ( 1.5 )pcall(ek)
     end
 end
-)function h4(e,...) local y=os.clock () if not e and h.h4cache and h.h4cacheT and y-h.h4cacheT<0.3 then return h.h4cache end
+)function h4(e,...) local y=os.clock ()
     if e or(y-G4>= 1.5 )or not F4 then
         ek()
     end
@@ -634,7 +635,7 @@ end
                 end
             end
         end
-    end h.h4cache=j h.h4cacheT=os.clock () return j end k4=function(e,...)
+    end return j end k4=function(e,...)
     if not e then
         return false , "NoUid"
     end
@@ -721,7 +722,14 @@ o4=function(...)
     end
     return h.glideSpeed or 350
 end
-V4=function(e,y,...) if not h.antiTrap then return nil end y=y or 8 if _G.CNMJ_Pad and _G.CNMJ_Pad.Parent then _G.CNMJ_Pad.Position =e-Vector3.new ( 0 , 3.2 , 0 ) return _G.CNMJ_Pad end local u=Instance.new ( "Part" )u.Name = "CNMJ_SafetyPad" u.Size =Vector3.new ( 28 , 1.5 , 28 )u.Position =e-Vector3.new ( 0 , 3.2 , 0 )u.Anchored = true u.Transparency = 1 u.CanCollide = true u.Parent =r _G.CNMJ_Pad =u task.delay (y,function(...) pcall(function(...) if _G.CNMJ_Pad ==u then _G.CNMJ_Pad =nil end u:Destroy() end) end) return u end
+V4=function(e,y,...) y=y or 8
+    local u=Instance.new ( "Part" )u.Name = "SafetyFloorPad_AntiVoid" u.Size =Vector3.new ( 28 , 1.5 , 28 )u.Position =e-Vector3.new ( 0 , 3.2 , 0 )u.Anchored = true u.Transparency = 1 u.CanCollide = true u.Parent =r task.delay (y,function(...) pcall(function(...) u:Destroy()
+        end
+        )
+    end
+    )
+    return u
+end
 H4=function(e,...)
     if P and e then
         pcall(function(...)
@@ -741,7 +749,7 @@ end
 if typeof(hookmetamethod)== "function" and not _G._DesyncAntiRagdollHooked then
     _G._DesyncAntiRagdollHooked = true
     local e e=hookmetamethod(game, "__newindex" ,safeNewCClosure(function(r,y,u,...)
-        if false and not executorCheckCaller()and typeof(r)== "Instance" then
+        if not executorCheckCaller()and typeof(r)== "Instance" then
             if r:IsA( "Motor6D" )and(y== "Enabled" and u== false )then
                 return nil
             end
@@ -780,19 +788,22 @@ S4=function(e,...) e=e or o.Character
             local e= "RigidJointWeld_" ..r.Name
             local y=r.Part1 :FindFirstChild(e)
             if not y then
-                H("[S4] weld skipped to preserve animation")
+                local y=Instance.new ( "WeldConstraint" )y.Name =e y.Part0 =r.Part0 y.Part1 =r.Part1 y.Parent =r.Part1
             end
         end
     end
 end
-Z4=function(e,...) if h and h.onTreadmill then return end if h and not h.antiKnockback then return end
+Z4=function(e,...)
+    if h and h.onTreadmill then
+        return
+    end
     e=e or o.Character
     if not e then
         return
     end
     local r=e:FindFirstChildOfClass( "Humanoid" )
     if r then
-        r:SetStateEnabled(Enum.HumanoidStateType.Ragdoll , false )r:SetStateEnabled(Enum.HumanoidStateType.FallingDown , false )
+        r:SetStateEnabled(Enum.HumanoidStateType.Ragdoll , false )r:SetStateEnabled(Enum.HumanoidStateType.FallingDown , false )r:SetStateEnabled(Enum.HumanoidStateType.Physics , false )r:SetStateEnabled(Enum.HumanoidStateType.PlatformStanding , false )r:SetStateEnabled(Enum.HumanoidStateType.Seated , false )
         if r.PlatformStand then
             r.PlatformStand = false
         end
@@ -807,11 +818,19 @@ Z4=function(e,...) if h and h.onTreadmill then return end if h and not h.antiKno
     end
     S4(e)
 end
-z4=function(e,...) if not e then return end if not h.antiKnockback then return end
+z4=function(e,...)
+    if not e then
+        return
+    end
     Z4(e)
     for e,y in ipairs(e:GetDescendants())do
         if y:IsA( "Motor6D" )then
-            H("[z4] motor lock disabled")
+            (y:GetPropertyChangedSignal( "Enabled" )):Connect(function(...)
+                if not y.Enabled then
+                    y.Enabled = true
+                end
+            end
+            )
         end
     end
     e.DescendantAdded :Connect(function(y,...)
@@ -1110,7 +1129,7 @@ d4=function(e,y,...)
             if r:IsA( "ProximityPrompt" )then
                 pcall(function(...) r.RequiresLineOfSight = false r.HoldDuration = 0
                     if typeof(fireproximityprompt)== "function" then
-                        fireproximityprompt(r)
+                        fireproximityprompt(r, 0 )fireproximityprompt(r)
                     end
                 end
                 )
@@ -1126,7 +1145,7 @@ d4=function(e,y,...)
                     if r:IsA( "ProximityPrompt" )then
                         pcall(function(...) r.RequiresLineOfSight = false r.HoldDuration = 0
                             if typeof(fireproximityprompt)== "function" then
-                                fireproximityprompt(r)
+                                fireproximityprompt(r, 0 )fireproximityprompt(r)
                             end
                         end
                         )
@@ -1144,11 +1163,14 @@ b4=function(e,...) h.godmode =e
     local y=r:FindFirstChildOfClass( "Humanoid" )
     if y then
         y:SetStateEnabled(Enum.HumanoidStateType.Dead ,not e)
-        if e and y.Health < 25 then y.Health = 100
+        if e and y.Health < 100 then
+            y.Health = 100
         end
     end
     for r,y in ipairs(r:GetDescendants())do
-        if y:IsA( "BasePart" )then if e and (y.Name == "HumanoidRootPart" or y.Name == "LowerTorso" or y.Name == "UpperTorso") then y.CanTouch = false y.CanCollide = false
+        if y:IsA( "BasePart" )then
+            if e then
+                y.CanTouch = false y.CanCollide = false
             end
         end
     end
@@ -1157,7 +1179,7 @@ end
 local function enableDesyncGodmode()
     b4(true)
 end
-local function enableAntiKnockback() h.antiKnockback = true pcall(function(...) Z4(o.Character) end) pcall(function(...) z4(o.Character) end) end local function disableAntiKnockback() h.antiKnockback = false end local function disableDesyncGodmode()
+local function disableDesyncGodmode()
     b4(false)
 end
 
@@ -1167,9 +1189,12 @@ A4=function(...)
     if not e or not y then
         return false
     end
-    pcall(function(...) if h.godmode then y.BreakJointsOnDeath = false end
-        local w=y H("[A4] humanoid reused, no clone")
-        H("[A4] animator reused")
+    pcall(function(...) y.BreakJointsOnDeath = false
+        local w=y:Clone()w.Parent =e y:Destroy()
+        local j=w:FindFirstChildOfClass( "Animator" )
+        if not j then
+            j=Instance.new ( "Animator" )j.Parent =w
+        end
         r.CurrentCamera.CameraSubject =w
         local k=e:FindFirstChild( "Animate" )
         if k and k:IsA( "LocalScript" )then
@@ -1421,9 +1446,7 @@ B4=function(...)
             end
             )
             if r and a~= false then
-                u=u+ 1 w[#w+ 1 ]=k.Position H(string.format ( "[PlaceEgg] Placed egg %s from inventory" ,tostring(j)))
-            end
-            task.wait ( 0.10 +math.random ()* 0.08 )
+                u=u+ 1 w[#w+ 1 ]=k.Position H(string.format ( "[PlaceEgg] Placed egg %s from inventory" ,tostring(j))) end task.wait ( 0.04 )
         end
     end
     return u
@@ -1482,7 +1505,7 @@ J4=function(e,...)
             end
         end
     end
-    if#j> 3 then for e= 4 ,#j, 1 do j[e]=nil end end if#j== 0 then
+    if#j== 0 then
         h.isHatching = false
         return 0
     end
@@ -1515,9 +1538,7 @@ J4=function(e,...)
                 end
             end
         end
-        )task.wait ( 0.10 +math.random ()* 0.08 )
-    end
-    task.wait ( 0.95 )h.isHatching = false H(string.format ( "[AutoHatch] Finished! Hatched %d eggs." ,a))
+        )task.wait ( 0.04 ) end task.wait ( 0.95 )h.isHatching = false H(string.format ( "[AutoHatch] Finished! Hatched %d eggs." ,a))
     return a
 end
 i4=function(...)
@@ -1690,7 +1711,8 @@ local uk= 5 K4=function(e,...)
         Y4=e
     end
 end
-c4=function(e,...) h.decoyDone = false h.mainTargetCache =nil if not h.autoPlaceEvery5 then
+c4=function(e,...)
+    if not h.autoPlaceEvery5 then
         return false
     end
     h.batchStealCount =((h.batchStealCount or 0 ))+ 1 H(string.format ( "[AutoPlace] Steal trip %d / %d completed successfully." ,h.batchStealCount ,uk))
@@ -2316,7 +2338,7 @@ local function Hk(...)
     return y
 end
 local tk= 0
-local sk= 25
+local sk= 10
 local function pk(...)
     if not h.autoUpgradeTreadmill then
         return
@@ -2511,7 +2533,7 @@ local function vk(...)
     return false
 end
 local ik= 0
-local Rk= 20
+local Rk= 8
 local function gk(...)
     if not h.autoBuyTrails then
         return
@@ -3175,9 +3197,9 @@ U4=function(e,u,w,j,...)
         if e and i then
             task.spawn (function(...) pcall(function(...)
                     if i:IsA( "RemoteFunction" )then
-                        i:InvokeServer({[ "Uid" ]=e})
+                        i:InvokeServer({[ "Uid" ]=e})i:InvokeServer(e)
                     else
-                        i:FireServer({[ "Uid" ]=e})
+                        i:FireServer({[ "Uid" ]=e})i:FireServer(e)
                     end
                 end
                 )
@@ -3235,9 +3257,9 @@ U4=function(e,u,w,j,...)
         if e and i then
             task.spawn (function(...) pcall(function(...)
                     if i:IsA( "RemoteFunction" )then
-                        i:InvokeServer({[ "Uid" ]=e})
+                        i:InvokeServer({[ "Uid" ]=e})i:InvokeServer(e)
                     else
-                        i:FireServer({[ "Uid" ]=e})
+                        i:FireServer({[ "Uid" ]=e})i:FireServer(e)
                     end
                 end
                 )
@@ -3254,7 +3276,8 @@ U4=function(e,u,w,j,...)
     if j and O4~=j then
         return false
     end
-    if R then h.statusText = "[Main] Dropping..." pcall(function(...) InstantDropHeldEgg(e, 0.8) end) local t3=os.clock ()+ 1.0 while w4(e) and os.clock ()<t3 and h.alive do if j and O4~=j then break end pcall(u4) task.wait ( 0.10 ) end h.statusText = "[Main] Re-picking..." local t4=os.clock ()+ 1.2 while not j4(e) and os.clock ()<t4 and h.alive do if j and O4~=j then break end pcall(function(...) d4(nil, u.Position) end) if i then pcall(function(...) if i:IsA("RemoteFunction") then i:InvokeServer({["Uid"]=e}) else i:FireServer({["Uid"]=e}) end end) end task.wait ( 0.15 ) end R=j4(e) if not R then if e then X4[e]=os.clock ()+ 2 end h.statusText = "[-] Main lost after re-pickup" return false end pcall(u4)H( "[GuardStrike] Egg successfully secured after guard strike! Stashed in backpack." )h.statusText = "Egg Secured! Tweening along Z=-360..."
+    if R then
+        pcall(u4)H( "[GuardStrike] Egg successfully secured after guard strike! Stashed in backpack." )h.statusText = "Egg Secured! Tweening along Z=-360..."
     else
         t( "[-] Failed to re-grab egg after guard strike (stolen or despawned)" )h.statusText = "[-] Failed to re-grab egg"
         if e then
@@ -3452,12 +3475,12 @@ l4=function(e,u,...)
         return true
     end
 end
-h.decoyDone=false h.mainTargetCache=nil h.decoyFailCount=h.decoyFailCount or {} local function GetNearestEgg() local hr=o.Character and o.Character:FindFirstChild("HumanoidRootPart") if not hr then return nil end local best,bd=nil,1e9 local es=h4(false) if not es or #es==0 then es=h4(true) end if not es then return nil end for _,rec in ipairs(es) do local st=rec.State if st=="Slot" or st=="Dropped" or st==1 then if rec.BoundsCFrame then local pos=rec.BoundsCFrame.Position if pos.X>=530 and not string.find(tostring(rec.Uid),"FirstArea") then if not (X4[rec.Uid] and os.clock()<X4[rec.Uid]) then local d=(hr.Position-pos).Magnitude if d<bd then bd=d best={Uid=rec.Uid,CFrame=rec.BoundsCFrame,Position=pos,Distance=d,Model=rec.PhysicalModel} end end end end end end return best end local lastRagScan=0 local lastRagScanRes=false local function IsRagdolled() local ch=o.Character local hu=ch and ch:FindFirstChildOfClass("Humanoid") if not hu then return false end local st=nil pcall(function() st=hu:GetState() end) if st==Enum.HumanoidStateType.Ragdoll or st==Enum.HumanoidStateType.Physics or st==Enum.HumanoidStateType.FallingDown then return true end if hu.PlatformStand then return true end if ch and os.clock()-lastRagScan>0.5 then lastRagScan=os.clock() lastRagScanRes=false for _,d in ipairs(ch:GetDescendants()) do if d:IsA("BallSocketConstraint") or d:IsA("HingeConstraint") then lastRagScanRes=true break end end end if lastRagScanRes then return true end return false end local function WaitForRagdoll(tm,sid) local t0=os.clock() tm=tm or 10 while os.clock()-t0<tm and h.alive do if sid and O4~=sid then return false end if not h.pureTweenFarm and not h.autoFarmLoop then return false end if IsRagdolled() then return true end task.wait(0.15) end return false end local function DecoyMainTarget(mode) local sid=O4 local now=os.clock() local main=nil if h.decoyN4Cache and h.decoyN4CacheT and now-h.decoyN4T<0.5 and h.decoyN4Cache.Uid then main=h.decoyN4Cache else pcall(function() main=N4() end) h.decoyN4Cache=main h.decoyN4T=now end if not main or not main.Uid then task.wait(0.25) return nil end local fails=(h.decoyFailCount and h.decoyFailCount[main.Uid]) or 0 if fails>=5 then h.decoyFailCount[main.Uid]=0 h.decoyDone=false h.mainTargetCache=nil end if h.decoyDone and h.mainTargetCache and h.mainTargetCache.Uid==main.Uid then return main end local decoy=nil pcall(function() decoy=GetNearestEgg() end) if not decoy or not decoy.Uid or decoy.Uid==main.Uid then h.decoyDone=true h.mainTargetCache=main return main end h.statusText="[Decoy] Waiting ragdoll..." if not WaitForRagdoll(8,sid) then X4[decoy.Uid]=os.clock ()+ 2 return nil end h.statusText=string.format("[Decoy] Grabbing nearest before main...") local ok=false if mode=="WARP" then local ch=o.Character local hr=ch and ch:FindFirstChild("HumanoidRootPart") if hr then pcall(function() o:RequestStreamAroundAsync(decoy.Position) end) V4(decoy.Position,8) pcall(function() ch:PivotTo(decoy.CFrame*CFrame.new(0,0.4,0)) end) local t1=os.clock()+2.5 while not w4(decoy.Uid) and os.clock()<t1 and h.alive do if sid and O4~=sid then break end pcall(function() d4(decoy.Model,decoy.Position) end) if i then pcall(function() if i:IsA("RemoteFunction") then i:InvokeServer({["Uid"]=decoy.Uid}) else i:FireServer({["Uid"]=decoy.Uid}) end end) end task.wait(0.2) end ok=w4(decoy.Uid) end else local rr=R4(decoy.CFrame*CFrame.new(0,0.4,0),h.glideSpeed,decoy.Uid,sid) if rr then local t1=os.clock()+2.5 while not w4(decoy.Uid) and os.clock()<t1 and h.alive do if sid and O4~=sid then break end pcall(function() d4(decoy.Model,decoy.Position) end) if i then pcall(function() if i:IsA("RemoteFunction") then i:InvokeServer({["Uid"]=decoy.Uid}) else i:FireServer({["Uid"]=decoy.Uid}) end end) end task.wait(0.2) end ok=w4(decoy.Uid) end end if not ok then X4[decoy.Uid]=os.clock()+2 return nil end h.statusText="[Decoy] Dropping decoy..." local t2=os.clock()+1.5 pcall(function(...) InstantDropHeldEgg(decoy.Uid, 0.8) end) while w4(decoy.Uid) and os.clock()<t2 and h.alive do if sid and O4~=sid then return nil end pcall(u4) task.wait(0.12) end if not w4(decoy.Uid) then h.decoyDone=true h.mainTargetCache=main H("[Decoy] Dropped, switching to MAIN "..tostring(main.Uid)) return main end  X4[decoy.Uid]=os.clock()+2 return nil end T4=function(e,...)
+T4=function(e,...)
     if Y4==e then
         return
     end
     O4=O4+ 1
-    local r=O4 Y4= "SWITCHING" if (e=="TWEEN" or e=="WARP") and not (h.godmode or h.antiKnockback or h.antiTrap) and os.clock ()-(h.warnT or 0 )>30 then h.warnT =os.clock () H("[Farm] WARNING: all protections OFF - enable Godmode/AntiKnockback/AntiTrap in Character tab") end h.pureTweenFarm = false h.autoFarmLoop = false pcall(D4)pcall(u4)
+    local r=O4 Y4= "SWITCHING" h.pureTweenFarm = false h.autoFarmLoop = false pcall(D4)pcall(u4)
     if e== "TWEEN" then
         if W4 then
             W4( false , true )
@@ -3510,10 +3533,10 @@ local Ck=os.clock ()task.spawn (function(...)
                     local u=w4()
                     if not u then
                         local u=O4
-                        local w=DecoyMainTarget("TWEEN")
+                        local w=N4()
                         if w and(h.pureTweenFarm and(Y4== "TWEEN" and O4==u))then
                             if h.onTreadmill or L4()then
-                                h.statusText = "[AutoSteal] Target found! Getting off treadmill..." M4()task.wait ( 0.08 +math.random ()* 0.06 )
+                                h.statusText = "[AutoSteal] Target found! Getting off treadmill..." M4()task.wait ( 0.08 )
                             end
                             local j,k=k4(w.Uid )
                             if not j and k~= "CarriedBySelf" then
@@ -3525,7 +3548,9 @@ local Ck=os.clock ()task.spawn (function(...)
                             if not h.swapped then
                                 A4()
                             end
-                            
+                            if not h.godmode then
+                                b4( true )
+                            end
                             Z4(r)pcall(function(...) o:RequestStreamAroundAsync(w.Position )
                             end
                             )
@@ -3535,7 +3560,7 @@ local Ck=os.clock ()task.spawn (function(...)
                                 return
                             end
                             if not s then
-                                t( "[AutoSteal] Egg was taken during flight. Switching to next target..." )X4[w.Uid ]=os.clock ()+ 5 h.decoyFailCount[w.Uid ]=((h.decoyFailCount[w.Uid ])or 0 )+ 1 if((h.decoyFailCount[w.Uid ])or 0 )>= 5 then h.decoyFailCount[w.Uid ]= 0 h.decoyDone = false h.mainTargetCache =nil end D4()
+                                t( "[AutoSteal] Egg was taken during flight. Switching to next target..." )X4[w.Uid ]=os.clock ()+ 5 D4()
                                 return
                             end
                             if h.pureTweenFarm and(Y4== "TWEEN" and((y.Position -w.Position )).Magnitude <= 22 )then
@@ -3560,7 +3585,7 @@ local Ck=os.clock ()task.spawn (function(...)
                                     end
                                 else
                                     if O4==u and(h.pureTweenFarm and Y4== "TWEEN" )then
-                                        t( "[AutoSteal] Guard Strike or Re-grab failed. Retrying with next egg..." )X4[w.Uid ]=os.clock ()+ 5 h.decoyFailCount[w.Uid ]=((h.decoyFailCount[w.Uid ])or 0 )+ 1 if((h.decoyFailCount[w.Uid ])or 0 )>= 5 then h.decoyFailCount[w.Uid ]= 0 h.decoyDone = false h.mainTargetCache =nil end D4()
+                                        t( "[AutoSteal] Guard Strike or Re-grab failed. Retrying with next egg..." )X4[w.Uid ]=os.clock ()+ 5 D4()
                                     end
                                 end
                             else
@@ -3588,7 +3613,7 @@ local Ck=os.clock ()task.spawn (function(...)
         if not r then
             t( "[AutoSteal Loop Recovered]:" ,tostring(y))pcall(D4)
         end
-        task.wait ( 0.08 +math.random ()* 0.06 )
+        task.wait ( 0.08 )
     end
 end
 )
@@ -3604,10 +3629,10 @@ local qk=os.clock ()task.spawn (function(...)
                     local r=w4()
                     if not r then
                         local r=O4
-                        local y=DecoyMainTarget("WARP")
+                        local y=N4()
                         if y and(h.autoFarmLoop and(Y4== "WARP" and O4==r))then
                             if h.onTreadmill or L4()then
-                                h.statusText = "[SnipeLoop] Target found! Getting off treadmill..." M4()task.wait ( 0.08 +math.random ()* 0.06 )
+                                h.statusText = "[SnipeLoop] Target found! Getting off treadmill..." M4()task.wait ( 0.08 )
                             end
                             local u=((y.Scale and y.Scale > 1.05 ))and string.format ( " | %.1fx" ,y.Scale )or "" H(string.format ( "[SnipeLoop] Starting Warp Snipe: %s | Zone: %s%s (Rank %d)" ,tostring(y.Category or "Egg" ),tostring(y.Area or "Field" ),u,tonumber(y.Rank )or 1 ))h.statusText =string.format ( "[SnipeLoop] Warping for %s%s..." ,tostring(y.Category or "Egg" ),u)
                             local w=l4(y,r)
@@ -3630,7 +3655,7 @@ local qk=os.clock ()task.spawn (function(...)
                                 if O4==r and(h.autoFarmLoop and Y4== "WARP" )then
                                     t( "[SnipeLoop] Snipe cycle failed. Resetting for next target..." )
                                     if y and y.Uid then
-                                        X4[y.Uid ]=os.clock ()+ 5 h.decoyFailCount[y.Uid ]=((h.decoyFailCount[y.Uid ])or 0 )+ 1 if((h.decoyFailCount[y.Uid ])or 0 )>= 5 then h.decoyFailCount[y.Uid ]= 0 h.decoyDone = false h.mainTargetCache =nil end
+                                        X4[y.Uid ]=os.clock ()+ 5
                                     end
                                     pcall(D4)
                                 end
@@ -3657,7 +3682,7 @@ local qk=os.clock ()task.spawn (function(...)
         if not r then
             t( "[SnipeLoop Loop Recovered]:" ,tostring(y))pcall(D4)
         end
-        task.wait ( 0.08 +math.random ()* 0.06 )
+        task.wait ( 0.08 )
     end
 end
 )task.spawn (function(...)
@@ -3838,14 +3863,14 @@ local function bk(...)
 end
 local function Ak(...) Lk= false
 end
-local lastHU4=0 y.Heartbeat :Connect(function(...)
+y.Heartbeat :Connect(function(...)
     local e=o.Character
     local r=e and e:FindFirstChild( "HumanoidRootPart" )
     local y=e and e:FindFirstChildOfClass( "Humanoid" )
     if not r then
         return
     end 
-    if y and h.antiKnockback and not((h and h.onTreadmill ))then
+    if y and not((h and h.onTreadmill ))then
         if y.PlatformStand then
             y.PlatformStand = false y:ChangeState(Enum.HumanoidStateType.Running )
         end
@@ -3859,7 +3884,7 @@ local lastHU4=0 y.Heartbeat :Connect(function(...)
         r.CFrame =CFrame.new (u.X , 72 ,u.Z )r.AssemblyLinearVelocity =Vector3.zero
         return
     end
-    if((h.pureTweenFarm or h.autoFarmLoop ))and not h.holdingEggForGuard and os.clock()-lastHU4>0.2 then lastHU4=os.clock() local r= false
+    if((h.pureTweenFarm or h.autoFarmLoop ))and not h.holdingEggForGuard then local r= false
         for e,y in ipairs(e:GetChildren())do
             if y:IsA( "Tool" )then
                 r= true
@@ -4149,7 +4174,7 @@ local function rM(e,r,y,...) pcall(function(...)
     end
     )
 end
-local function yM(...) rM(Fk.togTween ,Color3.fromRGB(184, 67, 95),Color3.fromRGB(46, 24, 32))rM(Fk.togTeleport ,Color3.fromRGB(211, 92, 122),Color3.fromRGB(46, 28, 36))rM(Fk.btnPlaceEgg ,Color3.fromRGB(160, 55, 85),Color3.fromRGB(42, 24, 32))rM(Fk.togAutoPlaceEvery5 ,Color3.fromRGB(195, 75, 105),Color3.fromRGB(46, 26, 34))rM(Fk.togGodmode ,Color3.fromRGB(184, 67, 95),Color3.fromRGB(46, 24, 32))rM(Fk.togAntiKnock ,Color3.fromRGB(184, 67, 95),Color3.fromRGB(46, 24, 32))rM(Fk.togAntiTrap ,Color3.fromRGB(184, 67, 95),Color3.fromRGB(46, 24, 32))rM(Fk.btnUnstick ,Color3.fromRGB(175, 80, 95),Color3.fromRGB(44, 26, 32))rM(Fk.btnReset ,Color3.fromRGB(145, 48, 73),Color3.fromRGB(38, 22, 30))rM(Fk.btnLangSettings ,Color3.fromRGB(205, 100, 120),Color3.fromRGB(46, 28, 34))
+local function yM(...) rM(Fk.togTween ,Color3.fromRGB(184, 67, 95),Color3.fromRGB(46, 24, 32))rM(Fk.togTeleport ,Color3.fromRGB(211, 92, 122),Color3.fromRGB(46, 28, 36))rM(Fk.btnPlaceEgg ,Color3.fromRGB(160, 55, 85),Color3.fromRGB(42, 24, 32))rM(Fk.togAutoPlaceEvery5 ,Color3.fromRGB(195, 75, 105),Color3.fromRGB(46, 26, 34))rM(Fk.togGodmode ,Color3.fromRGB(184, 67, 95),Color3.fromRGB(46, 24, 32))rM(Fk.btnUnstick ,Color3.fromRGB(175, 80, 95),Color3.fromRGB(44, 26, 32))rM(Fk.btnReset ,Color3.fromRGB(145, 48, 73),Color3.fromRGB(38, 22, 30))rM(Fk.btnLangSettings ,Color3.fromRGB(205, 100, 120),Color3.fromRGB(46, 28, 34))
 end
 local function uM(e,...)
     local r=e or Xk or "EN"
@@ -4221,7 +4246,7 @@ local function wM(e,...)
     if r.EggSelect then
         eM(Fk.secEggZones ,r.EggSelect.SecZones ,r.EggSelect.SecZonesDesc )eM(Fk.dropTargetZones ,r.EggSelect.DropZonesTitle ,r.EggSelect.DropZonesDesc )eM(Fk.secEggRarity ,r.EggSelect.SecRarities ,r.EggSelect.SecRaritiesDesc )eM(Fk.secEggRarities ,r.EggSelect.SecRarities ,r.EggSelect.SecRaritiesDesc )eM(Fk.dropTargetRarities ,r.EggSelect.DropRaritiesTitle ,r.EggSelect.DropRaritiesDesc )eM(Fk.togAlwaysSecret ,r.EggSelect.AlwaysSecretPlus ,r.EggSelect.AlwaysSecretPlusDesc )
     end
-    eM(Fk.secSafety ,r.Character.SecSafety )eM(Fk.togGodmode ,r.Character.GodmodeTitle ,r.Character.GodmodeDesc )eM(Fk.togAntiKnock ,"Anti-Knockback" ,"Resist ragdoll, PlatformStand and joint breaks")eM(Fk.togAntiTrap ,"Anti-Trap" ,"Dodge trap hitboxes and use safety pads")eM(Fk.btnUnstick ,r.Character.UnstickTitle ,r.Character.UnstickDesc )eM(Fk.secFlight ,r.Character.SecFlight )eM(Fk.sliderSpeed ,r.Character.SpeedTitle ,r.Character.SpeedDesc )eM(Fk.sliderReturnHeight ,"Return Height" ,"Return-to-base height only (10-100). Outbound to egg ignores it.")eM(Fk.secDashboard ,r.Settings.SecDashboard )eM(Fk.paraLiveDash ,r.Settings.DashTitle )eM(Fk.secBlacklist ,r.Settings.SecBlacklist )eM(Fk.secUI ,r.Settings.SecUI )eM(Fk.dropLang ,r.Settings.LangTitle )eM(Fk.sliderTransp ,r.Settings.TranspTitle ,r.Settings.TranspDesc )eM(Fk.dropTheme ,r.Settings.ThemeTitle )eM(Fk.secPerformance ,r.Settings.SecPerformance )eM(Fk.togPerformance ,r.Settings.PerformanceTitle ,r.Settings.PerformanceDesc )eM(Fk.togDisable3D ,r.Settings.Disable3DTitle ,r.Settings.Disable3DDesc )eM(Fk.secSystem ,r.Settings.SecSystem )eM(Fk.togAntiAFK ,r.Settings.AntiAFKTitle ,r.Settings.AntiAFKDesc )eM(Fk.btnReset ,r.Settings.ResetTitle ,r.Settings.ResetDesc )eM(Fk.btnRejoin ,r.Settings.RejoinTitle ,r.Settings.RejoinDesc )eM(Fk.btnUnload ,r.Settings.UnloadTitle ,r.Settings.UnloadDesc )yM()
+    eM(Fk.secSafety ,r.Character.SecSafety )eM(Fk.togGodmode ,r.Character.GodmodeTitle ,r.Character.GodmodeDesc )eM(Fk.btnUnstick ,r.Character.UnstickTitle ,r.Character.UnstickDesc )eM(Fk.secFlight ,r.Character.SecFlight )eM(Fk.sliderSpeed ,r.Character.SpeedTitle ,r.Character.SpeedDesc )eM(Fk.secDashboard ,r.Settings.SecDashboard )eM(Fk.paraLiveDash ,r.Settings.DashTitle )eM(Fk.secBlacklist ,r.Settings.SecBlacklist )eM(Fk.secUI ,r.Settings.SecUI )eM(Fk.dropLang ,r.Settings.LangTitle )eM(Fk.sliderTransp ,r.Settings.TranspTitle ,r.Settings.TranspDesc )eM(Fk.dropTheme ,r.Settings.ThemeTitle )eM(Fk.secPerformance ,r.Settings.SecPerformance )eM(Fk.togPerformance ,r.Settings.PerformanceTitle ,r.Settings.PerformanceDesc )eM(Fk.togDisable3D ,r.Settings.Disable3DTitle ,r.Settings.Disable3DDesc )eM(Fk.secSystem ,r.Settings.SecSystem )eM(Fk.togAntiAFK ,r.Settings.AntiAFKTitle ,r.Settings.AntiAFKDesc )eM(Fk.btnReset ,r.Settings.ResetTitle ,r.Settings.ResetDesc )eM(Fk.btnRejoin ,r.Settings.RejoinTitle ,r.Settings.RejoinDesc )eM(Fk.btnUnload ,r.Settings.UnloadTitle ,r.Settings.UnloadDesc )yM()
 end
 local function jM(...)
     local e=Instance.new ( "ScreenGui" )e.Name = "CNMJ_LOADER_SCREEN" e.ResetOnSpawn = false e.DisplayOrder = 9999999 e.ZIndexBehavior =Enum.ZIndexBehavior.Sibling e.AutoLocalize = false pcall(function(...)
@@ -4743,7 +4768,7 @@ local function oM(...)
         })Fk.secSafety =Yk:Section({[ "Title" ]=P.Character.SecSafety })Fk.togGodmode =Yk:Toggle({[ "Title" ]=P.Character.GodmodeTitle ;
         [ "Desc" ]=P.Character.GodmodeDesc ,[ "Icon" ]= "solar:shield-check-bold" ,[ "Value" ]=(h.godmode == true ) ; [ "Callback" ]=function(e,...) if e then enableDesyncGodmode()j({[ "Title" ]= "Godmode" ,[ "Content" ]=Gk[Xk].Notifications.GodmodeStarted ,[ "Icon" ]= "shield-check" })
             else
-                disableDesyncGodmode()j({[ "Title" ]= "Godmode" ,[ "Content" ]=Gk[Xk].Notifications.GodmodeStopped ,[ "Icon" ]= "shield-off" }) end x() end })Fk.togAntiKnock =Yk:Toggle({[ "Title" ]= "Anti-Knockback" ; [ "Desc" ]= "Resist ragdoll, PlatformStand and joint breaks" ,[ "Icon" ]= "solar:shield-check-bold" ,[ "Value" ]=(h.antiKnockback == true ) ; [ "Callback" ]=function(e,...) if e then enableAntiKnockback() else disableAntiKnockback() end x() j({[ "Title" ]= "Anti-Knockback" ,[ "Content" ]=e and "Anti-Knockback enabled" or "Anti-Knockback disabled" ,[ "Icon" ]=e and "shield-check" or "shield-off" }) end })Fk.togAntiTrap =Yk:Toggle({[ "Title" ]= "Anti-Trap" ; [ "Desc" ]= "Dodge trap hitboxes and use safety pads" ,[ "Icon" ]= "solar:shield-check-bold" ,[ "Value" ]=(h.antiTrap == true ) ; [ "Callback" ]=function(e,...) h.antiTrap =e x() if not e then pcall(function(...) if _G.CNMJ_Pad then _G.CNMJ_Pad:Destroy() _G.CNMJ_Pad =nil end end) end j({[ "Title" ]= "Anti-Trap" ,[ "Content" ]=e and "Anti-Trap enabled" or "Anti-Trap disabled" ,[ "Icon" ]=e and "shield-check" or "shield-off" }) end })Fk.btnUnstick =Yk:Button({[ "Title" ]=P.Character.UnstickTitle ,[ "Desc" ]=P.Character.UnstickDesc ,[ "Icon" ]= "solar:exit-bold" ;
+                disableDesyncGodmode()j({[ "Title" ]= "Godmode" ,[ "Content" ]=Gk[Xk].Notifications.GodmodeStopped ,[ "Icon" ]= "shield-off" }) end x() end })Fk.btnUnstick =Yk:Button({[ "Title" ]=P.Character.UnstickTitle ,[ "Desc" ]=P.Character.UnstickDesc ,[ "Icon" ]= "solar:exit-bold" ;
         [ "Callback" ]=function(...) pcall(M4)pcall(C4)pcall(D4)j({[ "Title" ]= "Unstick" ;
             [ "Content" ]=Gk[Xk].Notifications.UnstickDone ,[ "Icon" ]= "check" })
         end
@@ -4751,7 +4776,7 @@ local function oM(...)
         [ "Max" ]= 1000 ;
         [ "Default" ]=h.glideSpeed or 600 },[ "Callback" ]=function(e,...) h.glideSpeed =e Y(e)
         end
-        })Fk.sliderReturnHeight =Yk:Slider({[ "Title" ]= "Return Height" ,[ "Desc" ]= "Return-to-base height only (10-100). Outbound to egg ignores it." ,[ "Step" ]= 5 ,[ "Value" ]={[ "Min" ]= 10 ;[ "Max" ]= 100 ;[ "Default" ]=h.returnHeight or 70 },[ "Callback" ]=function(e,...) h.returnHeight =math.clamp (e or 70 , 10 , 100 ); x() end })Fk.secDashboard =Tk:Section({[ "Title" ]=P.Settings.SecDashboard })Fk.paraLiveDash =Tk:Paragraph({[ "Title" ]=P.Settings.DashTitle ;
+        })Fk.secDashboard =Tk:Section({[ "Title" ]=P.Settings.SecDashboard })Fk.paraLiveDash =Tk:Paragraph({[ "Title" ]=P.Settings.DashTitle ;
         [ "Desc" ]=string.format ( "Status: Ready\nFarm Mode: Idle\nCarried Eggs: 0\nFlight Speed: %d Studs/s" ,h.glideSpeed or 600 )})Fk.secUI =Tk:Section({[ "Title" ]=P.Settings.SecUI })Fk.dropLang =Tk:Dropdown({[ "Title" ]=P.Settings.LangTitle ,[ "Values" ]={ "English" , "Thai" },[ "Value" ]=(Xk== "EN" and "English" or "Thai" ),[ "Callback" ]=function(e,...)
             local r=(e== "Thai" )and "TH" or "EN"
             if r~=Xk then
@@ -5022,7 +5047,7 @@ local function oM(...)
         if e then
             enableDesyncGodmode()
         else
-            disableDesyncGodmode() end x() end )b( "Anti-Knockback" , "Resist ragdoll, PlatformStand and joint breaks" , (h.antiKnockback == true ) ,Color3.fromRGB(184, 67, 95), 32 ,function(e,...) if e then enableAntiKnockback() else disableAntiKnockback() end x() end )b( "Anti-Trap" , "Dodge trap hitboxes and use safety pads" , (h.antiTrap == true ) ,Color3.fromRGB(184, 67, 95), 33 ,function(e,...) h.antiTrap =e x() if not e then pcall(function(...) if _G.CNMJ_Pad then _G.CNMJ_Pad:Destroy() _G.CNMJ_Pad =nil end end) end end )A( "Get Out Treadmill" , "Instantly escape from treadmill or gear" ,Color3.fromRGB(175, 80, 95), 34 ,function(...) pcall(M4)pcall(C4)pcall(D4)
+            disableDesyncGodmode() end x() end )A( "Get Out Treadmill" , "Instantly escape from treadmill or gear" ,Color3.fromRGB(175, 80, 95), 32 ,function(...) pcall(M4)pcall(C4)pcall(D4)
     end
     )E( "CONTROLS & SETTINGS" , 40 )
     local F=Instance.new ( "Frame" )F.Size =UDim2.new ( 1 , 0 , 0 , 48 )F.BackgroundColor3 =t F.LayoutOrder = 41 F.Parent =n;
@@ -5037,9 +5062,9 @@ local function oM(...)
     end
     )m.MouseButton1Click :Connect(function(...) h.glideSpeed =math.min ( 1000 ,((h.glideSpeed or 600 ))+ 25 )T.Text =string.format ( "%d Studs/s" ,h.glideSpeed )Y(h.glideSpeed )
     end
-    ); local F2=Instance.new ( "Frame" )F2.Size =UDim2.new ( 1 , 0 , 0 , 48 )F2.BackgroundColor3 =t F2.LayoutOrder = 42 F2.Parent =n;(Instance.new ( "UICorner" ,F2)).CornerRadius =UDim.new ( 0 , 8 )local O2=Instance.new ( "TextLabel" )O2.Size =UDim2.new ( 1 , -130 , 0 , 18 )O2.Position =UDim2.new ( 0 , 10 , 0 , 6 )O2.BackgroundTransparency = 1 O2.Text = "Return Height" O2.TextColor3 =B O2.TextSize = 13 O2.Font =Enum.Font.GothamBold O2.TextXAlignment =Enum.TextXAlignment.Left O2.AutoLocalize = false O2.Parent =F2 local T2=Instance.new ( "TextLabel" )T2.Size =UDim2.new ( 0 , 70 , 0 , 24 )T2.Position =UDim2.new ( 1 , -80 , 0.5 , -12 )T2.BackgroundColor3 =V T2.Text =string.format ( "%d" ,h.returnHeight or 70 )T2.TextColor3 =Color3.fromRGB(232, 160, 181)T2.TextSize = 11 T2.Font =Enum.Font.GothamBold T2.AutoLocalize = false T2.Parent =F2;(Instance.new ( "UICorner" ,T2)).CornerRadius =UDim.new ( 0 , 6 )local W2=Instance.new ( "TextButton" )W2.Size =UDim2.new ( 0 , 24 , 0 , 24 )W2.Position =UDim2.new ( 1 , -110 , 0.5 , -12 )W2.BackgroundColor3 =s W2.Text = "-" W2.TextColor3 =B W2.TextSize = 14 W2.Font =Enum.Font.GothamBold W2.Parent =F2;(Instance.new ( "UICorner" ,W2)).CornerRadius =UDim.new ( 0 , 6 )local m2=Instance.new ( "TextButton" )m2.Size =UDim2.new ( 0 , 24 , 0 , 24 )m2.Position =UDim2.new ( 1 , -138 , 0.5 , -12 )m2.BackgroundColor3 =s m2.Text = "+" m2.TextColor3 =B m2.TextSize = 14 m2.Font =Enum.Font.GothamBold m2.Parent =F2;(Instance.new ( "UICorner" ,m2)).CornerRadius =UDim.new ( 0 , 6 )W2.MouseButton1Click :Connect(function(...) h.returnHeight =math.max ( 10 ,((h.returnHeight or 70 ))- 5 )T2.Text =string.format ( "%d" ,h.returnHeight )x() end )m2.MouseButton1Click :Connect(function(...) h.returnHeight =math.min ( 100 ,((h.returnHeight or 70 ))+ 5 )T2.Text =string.format ( "%d" ,h.returnHeight )x() end )A( "Reset Character State" , "Clear velocity, cancel push & unfreeze" ,Color3.fromRGB(145, 48, 73), 43 ,function(...) pcall(D4)pcall(u4)
+    )A( "Reset Character State" , "Clear velocity, cancel push & unfreeze" ,Color3.fromRGB(145, 48, 73), 42 ,function(...) pcall(D4)pcall(u4)
     end
-    )A( "Unload Script" , "Destroy UI and stop all background loops" ,Color3.fromRGB(90, 30, 45), 44 ,function(...) aM()
+    )A( "Unload Script" , "Destroy UI and stop all background loops" ,Color3.fromRGB(90, 30, 45), 43 ,function(...) aM()
     end
     )E( "EGG SELECT (ZONES & RARITIES)" , 45 )
     local e4=Instance.new ( "TextButton" )e4.Size =UDim2.new ( 1 , 0 , 0 , 48 )e4.BackgroundColor3 =t e4.LayoutOrder = 46 e4.Text = "" e4.AutoButtonColor = false e4.Parent =n;
@@ -5126,7 +5151,7 @@ local function oM(...)
     end
     )
 end
-H( "[+] Initializing Cheat Ni Mong - Jay x WindUI v42.64 (Steal an Egg Edition)..." )oM()task.spawn (function(...) task.wait ( 0.5 )A4()C4()
+H( "[+] Initializing Cheat Ni Mong - Jay x WindUI v42.64 (Steal an Egg Edition)..." )oM()task.spawn (function(...) task.wait ( 0.5 )A4()b4( true )C4()
     if o.Character then
         z4(o.Character )
     end
@@ -5134,7 +5159,7 @@ H( "[+] Initializing Cheat Ni Mong - Jay x WindUI v42.64 (Steal an Egg Edition).
 end
 )o.CharacterAdded :Connect(function(e,...) task.wait ( 0.6 )
     if h.alive then
-        D4()n4()C4()A4()z4(e)u4()
+        D4()n4()C4()A4()b4( true )z4(e)u4()
     end
 end
 )
