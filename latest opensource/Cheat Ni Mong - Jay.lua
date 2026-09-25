@@ -95,6 +95,42 @@ local D=J( "RF/Treadmill/AskTierRaise" , "Treadmills: RequestUpgrade" , "AskTier
 local C=J( "RF/Trailwear/AskPurchase" , "Trailwear: RequestPurchase" , "AskPurchase" )
 local q=J( "RF/Trailwear/AskChoose" , "Trailwear: RequestEquip" , "AskChoose" )
 local n=J( "RF/Trailwear/AskDoff" , "Trailwear: RequestUnequip" , "AskDoff" )H(string.format ( "[RemoteCheck] Carry: %s | Snapshot: %s | Place: %s | Hatch: %s | FinishHatch: %s | Strike: %s | Toll: %s | Doff: %s" ,tostring(i~=nil),tostring(R~=nil),tostring(K~=nil),tostring(g~=nil),tostring(Q~=nil),tostring(P~=nil),tostring(N~=nil),tostring(U~=nil)))
+task.spawn (function(...)
+    h.readyNote = "Waiting for game..."
+    pcall(function(...) repeat task.wait ( 0.5 ) until game:IsLoaded() end)
+    h.readyNote = "Waiting for character..."
+    local ct=os.clock ()+ 30
+    while os.clock ()<ct do
+        local ch=o.Character local hr=ch and ch:FindFirstChild ( "HumanoidRootPart" )
+        if hr then break end
+        task.wait ( 0.5 )
+    end
+    h.readyNote = "Syncing remotes..."
+    local rt=os.clock ()+ 15
+    while os.clock ()<rt do
+        i=i or J( "RF/EggWorld/AskFieldEggCarry" , "AskFieldEggCarry" )
+        R=R or J( "RF/EggWorld/AskFieldEggSnapshot" , "AskFieldEggSnapshot" )
+        K=K or J( "RF/EggWorld/AskPlaceEgg" , "AskPlaceEgg" )
+        g=g or J( "RF/EggWorld/AskHatch" , "AskHatch" )
+        Q=Q or J( "RF/EggWorld/AskFinishHatch" , "AskFinishHatch" )
+        U=U or J( "RF/Treadmill/AskDoff" , "AskDoff" )
+        l=l or J( "RF/Treadmill/AskDon" , "AskDon" )
+        if i and R and K and g and Q and U and l then break end
+        task.wait ( 0.5 )
+    end
+    h.readyNote = "Locating plot..."
+    pcall(function(...) local pt=os.clock ()+ 15 while os.clock ()<pt do local a=t4() if a then break end task.wait ( 0.5 ) end end)
+    h.readyNote = "Loading save data..."
+    pcall(function(...)
+        local rs=game:GetService("ReplicatedStorage")
+        local sh=rs:FindFirstChild("Shared") local dt=rs:FindFirstChild("Data")
+        if sh and not h.sellSave then local sOK,sM=pcall(require,sh:FindFirstChild("Save")) if sOK and sM then h.sellSave=sM end end
+        if dt and not h.sellAssets then local aOK,aM=pcall(require,dt:FindFirstChild("Assets")) if aOK and aM then h.sellAssets=aM end end
+    end)
+    h.ready = true h.readyNote = "Ready"
+    H(string.format ( "[Boot] Ready: carry=%s snapshot=%s place=%s plot=%s save=%s" ,tostring(i~=nil),tostring(R~=nil),tostring(K~=nil),tostring(h.plot~=nil),tostring(h.sellSave~=nil)))
+end
+)
 
 local f={[ "Light Dark" ]= 1300 ,[ "LightDark" ]= 1300 ;
 [ "Titan Temple" ]= 1100 ,[ "Cherry Blossom" ]= 1000 ,[ "Cosmic" ]= 900 ;
@@ -206,7 +242,7 @@ local function T(...)
         e={[ "selectedZones" ]=r;
         [ "selectedRarities" ]=y,[ "alwaysCollectSecretPlus" ]= true ,[ "minRarityTier" ]= 2 ;
         [ "autoTreadmill" ]= true ; [ "autoUpgradeTreadmill" ]= true ,[ "autoBuyTrails" ]= true ; [ "hideNotEnoughMoney" ]= true ;
-        [ "performanceMode" ]= false ,[ "disable3D" ]= false ,[ "antiAFK" ]= true ,[ "returnHeight" ]= 70 ,[ "autoSellEgg" ]= false ,[ "autoSellPet" ]= false ,[ "sellEggRarities" ]={},[ "sellPetRarities" ]={},[ "language" ]= "EN" }
+        [ "performanceMode" ]= false ,[ "disable3D" ]= false ,[ "antiAFK" ]= true ,[ "autoSellEgg" ]= false ,[ "autoSellPet" ]= false ,[ "sellEggRarities" ]={},[ "sellPetRarities" ]={},[ "language" ]= "EN" }
     else
         if type(e.selectedZones )~= "table" then
             e.selectedZones =r
@@ -242,7 +278,7 @@ local function T(...)
         if e.disable3D ==nil then
             e.disable3D = false
         end
-        if e.antiAFK ==nil then e.antiAFK = true end if e.autoSellEgg ==nil then e.autoSellEgg = false end if e.autoSellPet ==nil then e.autoSellPet = false end if type(e.sellEggRarities )~= "table" then e.sellEggRarities ={} end if type(e.sellPetRarities )~= "table" then e.sellPetRarities ={} end if e.returnHeight ==nil then e.returnHeight = 70 end    
+        if e.antiAFK ==nil then e.antiAFK = true end if e.autoSellEgg ==nil then e.autoSellEgg = false end if e.autoSellPet ==nil then e.autoSellPet = false end if type(e.sellEggRarities )~= "table" then e.sellEggRarities ={} end if type(e.sellPetRarities )~= "table" then e.sellPetRarities ={} end    
         if e.language and((e.language == "EN" or e.language == "TH" ))then
             currentLang=e.language
         end
@@ -258,7 +294,7 @@ local function x(...) pcall(function(...)
             [ "hideNotEnoughMoney" ]=(h.hideNotEnoughMoney == true );
             [ "performanceMode" ]=(h.performanceMode == true );
             [ "disable3D" ]=(h.disable3D == true );
-            [ "antiAFK" ]=(h.antiAFK == true ),[ "returnHeight" ]=math.clamp (tonumber(h.returnHeight )or 70 , 1 , 100 ),[ "autoSellEgg" ]=(h.autoSellEgg == true ),[ "autoSellPet" ]=(h.autoSellPet == true ),[ "sellEggRarities" ]=h.sellEggRarities or{},[ "sellPetRarities" ]=h.sellPetRarities or{};
+            [ "antiAFK" ]=(h.antiAFK == true ),[ "autoSellEgg" ]=(h.autoSellEgg == true ),[ "autoSellPet" ]=(h.autoSellPet == true ),[ "sellEggRarities" ]=h.sellEggRarities or{},[ "sellPetRarities" ]=h.sellPetRarities or{};
             [ "language" ]=currentLang or "EN" }
             local y=a:JSONEncode(r)writefile(z,y)
         end
@@ -275,14 +311,14 @@ local W=T()h={[ "godmode" ]= true ,[ "autoGlide" ]= true ,[ "autoHatch" ]= false
 [ "selectedRarities" ]=W.selectedRarities ;
 [ "alwaysCollectSecretPlus" ]=W.alwaysCollectSecretPlus ,[ "minRarityTier" ]=W.minRarityTier ,[ "autoTreadmill" ]=(W.autoTreadmill ~= false );
 [ "autoUpgradeTreadmill" ]=(W.autoUpgradeTreadmill ~= false ),[ "autoBuyTrails" ]=(W.autoBuyTrails ~= false ),[ "hideNotEnoughMoney" ]=(W.hideNotEnoughMoney ~= false );
-[ "performanceMode" ]=(W.performanceMode == true ),[ "disable3D" ]=(W.disable3D == true ),[ "antiAFK" ]= true ,[ "returnHeight" ]=W.returnHeight or 70 ,[ "autoSellEgg" ]=(W.autoSellEgg == true ),[ "autoSellPet" ]=(W.autoSellPet == true ),[ "sellEggRarities" ]=W.sellEggRarities or{},[ "sellPetRarities" ]=W.sellPetRarities or{},[ "onTreadmill" ]= false ,[ "lastTreadmillMount" ]= 0 ,[ "laneZ" ]= -360 ,[ "swapped" ]= false ;
+[ "performanceMode" ]=(W.performanceMode == true ),[ "disable3D" ]=(W.disable3D == true ),[ "antiAFK" ]= true ,[ "autoSellEgg" ]=(W.autoSellEgg == true ),[ "autoSellPet" ]=(W.autoSellPet == true ),[ "sellEggRarities" ]=W.sellEggRarities or{},[ "sellPetRarities" ]=W.sellPetRarities or{},[ "onTreadmill" ]= false ,[ "lastTreadmillMount" ]= 0 ,[ "laneZ" ]= -360 ,[ "swapped" ]= false ;
 [ "teleporting" ]= false ,[ "isReturning" ]= false ;
 [ "delivering" ]= false ,[ "holdingEggForGuard" ]= false ,[ "currentTargetModel" ]=nil,[ "targetPosition" ]=nil;
 [ "stateTime" ]=os.clock (),[ "statusText" ]= "Ready" ,[ "bestEggInfo" ]= "Scanning..." ;
 [ "gui" ]=nil;
 [ "alive" ]= true ,[ "plot" ]=nil;
 [ "pen" ]=nil,[ "origin" ]=nil;
- [ "tread" ]=nil,[ "justFailedMain" ]= false ,[ "carryN" ]= 0 }
+ [ "tread" ]=nil,[ "carryN" ]= 0 ,[ "ready" ]= false ,[ "readyNote" ]= "Booting..." }
 if next(h.sellEggRarities or{})==nil then h.sellEggRarities ={Common=true,Uncommon=true,Rare=true,Epic=true,Legendary=true,Mythic=true} end
 if next(h.sellPetRarities or{})==nil then h.sellPetRarities ={Common=true,Uncommon=true,Rare=true,Epic=true,Legendary=true,Mythic=true} end
 
@@ -1562,7 +1598,7 @@ g4=function(e,r,u,...)
     if k then
         k.AutoRotate = false
     end
-    local a=s4()a=Vector3.new (a.X ,math.clamp (h.returnHeight or 70 , 1 , 100 ),a.Z )e=math.max ( 100 ,e or h.glideSpeed or 600 )
+    local a=s4()e=math.max ( 100 ,e or h.glideSpeed or 600 )
     local V=h.laneZ or L h.isReturning = true h.stateTime =os.clock ()V4(a, 20 )j.AssemblyLinearVelocity =Vector3.zero j.AssemblyAngularVelocity =Vector3.zero
     local H=o4()
     local t=math.max (e,H)
@@ -1844,7 +1880,7 @@ Q4=function(e,r,...)
         j.AutoRotate = false
     end
     local k=h.laneZ or L
-    local a=Vector3.new (E- 10 ,math.clamp (h.returnHeight or 70 , 1 , 100 ),k)e=math.max ( 100 ,e or h.glideSpeed or 350 )h.isReturning = true h.stateTime =os.clock ()V4(Vector3.new (E,math.clamp (h.returnHeight or 70 , 1 , 100 ),k), 20 )pcall(u4)w.AssemblyLinearVelocity =Vector3.zero w.AssemblyAngularVelocity =Vector3.zero
+    local a=Vector3.new (E- 10 , 70 ,k)e=math.max ( 100 ,e or h.glideSpeed or 350 )h.isReturning = true h.stateTime =os.clock ()V4(Vector3.new (E, 70 ,k), 20 )pcall(u4)w.AssemblyLinearVelocity =Vector3.zero w.AssemblyAngularVelocity =Vector3.zero
     local V=o4()
     local H=math.max (e,V)
     local s=os.clock ()+ 15
@@ -3140,10 +3176,6 @@ U4=function(e,u,w,j,...)
     if not a or not V then
         return false
     end
-    if V.Health ~=nil and V.Health <= 0 then
-        h.securingEgg = false h.holdingEggForGuard = false
-        return false
-    end
     h.securingEgg = true h.isReturning = false h.stateTime =os.clock ()h.holdingEggForGuard = true
     local s=u.Position V4(s, 14 )h.currentTargetModel =w h.targetPosition =s a.AssemblyLinearVelocity =Vector3.zero a.AssemblyAngularVelocity =Vector3.zero Z4(k)pcall(function(...) o:RequestStreamAroundAsync(s)
     end
@@ -3187,17 +3219,17 @@ U4=function(e,u,w,j,...)
             end
         end
         k:PivotTo(u*CFrame.new ( 0 , 0.4 , 0 ))d4(w,s)
-        if e and i and os.clock ()-(h.lastCarry or 0 )>0.5 then h.lastCarry =os.clock ()h.carryN =(h.carryN or 0 )+ 1
+        if e and i then
             task.spawn (function(...) pcall(function(...)
                     if i:IsA( "RemoteFunction" )then
-                        i:InvokeServer({[ "Uid" ]=e})
+                        i:InvokeServer({[ "Uid" ]=e})i:InvokeServer(e)
                     else
-                        i:FireServer({[ "Uid" ]=e})
+                        i:FireServer({[ "Uid" ]=e})i:FireServer(e)
                     end
                 end
                 )
             end
-            )
+            )h.carryN =(h.carryN or 0 )+ 1
         end
         y.Heartbeat :Wait()
     end
@@ -3247,17 +3279,17 @@ U4=function(e,u,w,j,...)
             break
         end
         k:PivotTo(u*CFrame.new ( 0 , 0.4 , 0 ))d4(w,s)
-        if e and i and os.clock ()-(h.lastCarry or 0 )>0.5 then h.lastCarry =os.clock ()h.carryN =(h.carryN or 0 )+ 1
+        if e and i then
             task.spawn (function(...) pcall(function(...)
                     if i:IsA( "RemoteFunction" )then
-                        i:InvokeServer({[ "Uid" ]=e})
+                        i:InvokeServer({[ "Uid" ]=e})i:InvokeServer(e)
                     else
-                        i:FireServer({[ "Uid" ]=e})
+                        i:FireServer({[ "Uid" ]=e})i:FireServer(e)
                     end
                 end
                 )
             end
-            )
+            )h.carryN =(h.carryN or 0 )+ 1
         end
         y.Heartbeat :Wait()
     end
@@ -3291,10 +3323,6 @@ l4=function(e,u,...)
         D4()
         return false
     end
-    if k.Health ~=nil and k.Health <= 0 then
-        D4()
-        return false
-    end
     if k then
         k:UnequipTools()
     end
@@ -3321,18 +3349,6 @@ l4=function(e,u,...)
     end
     local s=select( 2 ,e4())
     if not s then
-        local bkTool,bkUid=r4()
-        if bkTool then
-            pcall(function(...) k:EquipTool(bkTool) end)task.wait ( 0.15 )
-            s=select( 2 ,e4())
-            if s then h.justFailedMain = false h.statusText = "[Decoy] Re-equipped backpack egg, skipping Lake..." H( "[Snipe] Reusing backpack decoy (no Lake trip)." ) end
-        end
-    end
-    if not s then
-        if h.justFailedMain then
-            t( "[Snipe] Cooling down after failed main (no decoy held). Retrying shortly..." )h.statusText = "Cooling down (last main failed)..." task.wait ( 3 )D4()
-            return false
-        end
         local e=P4()
         if not e then
             t( "[-] Lake egg not found" )h.statusText = "[-] No Lake egg found" D4()
@@ -3365,7 +3381,7 @@ l4=function(e,u,...)
                 return false
             end
             d4(e.Model ,e.Position )
-            if e.Uid and i and os.clock ()-(h.lastCarry or 0 )>0.5 then h.lastCarry =os.clock ()h.carryN =(h.carryN or 0 )+ 1
+            if e.Uid and i then
                 task.spawn (function(...) pcall(function(...)
                         if i:IsA( "RemoteFunction" )then
                             i:InvokeServer({[ "Uid" ]=e.Uid })
@@ -3375,7 +3391,7 @@ l4=function(e,u,...)
                     end
                     )
                 end
-                )
+                )h.carryN =(h.carryN or 0 )+ 1
             end
             y.Heartbeat :Wait()
         end
@@ -3384,7 +3400,6 @@ l4=function(e,u,...)
             t( "[-] Lake egg pickup failed" )h.statusText = "[-] Lake pickup failed" D4()
             return false
         end
-        h.justFailedMain = false
     end
     h.statusText = "[3/7] Pre-streaming Target..." pcall(function(...) o:RequestStreamAroundAsync(H)
     end
@@ -3478,16 +3493,18 @@ l4=function(e,u,...)
         end
     end
     if not l then
-        t( "[-] Guard Strike criteria not met" )h.statusText = "[-] Guard Strike failed, returning to base..."
-        if V then X4[V]=os.clock ()+ 30 end
-        h.justFailedMain = true pcall(u4)pcall(function(...) Q4(h.glideSpeed or 600 ,u) end)pcall(u4)h.isReturning = false h.delivering = false D4()
+        t( "[-] Guard Strike criteria not met" )h.statusText = "[-] Guard Strike criteria failed" D4()
         return false
     else
-        h.statusText = "[7/7] Target Secured! Stashing into Backpack..." h.teleporting = false h.justFailedMain = false pcall(u4)
+        h.statusText = "[7/7] Target Secured! Stashing into Backpack..." h.teleporting = false pcall(u4)
         return true
     end
 end
 T4=function(e,...)
+    if (e== "TWEEN" or e== "WARP" )and not h.ready then
+        H( "[Boot] Still syncing with server, try again in a few seconds..." )h.statusText = "[Boot] Still syncing..."
+        return
+    end
     if Y4==e then
         return
     end
@@ -3733,45 +3750,79 @@ local function SellScan(invKeys,rarMap)
 if not rarMap then return 0 end
 local has=false
 for _,v in pairs(rarMap) do if v then has=true break end end
-if not has then return 0 end
+if not has then t("[AutoSell] No rarities checked, skipping scan") return 0 end
 local rs=game:GetService("ReplicatedStorage")
 local pkgs=rs and rs:FindFirstChild("Packages")
 local net=pkgs and pkgs:FindFirstChild("Networking")
 local wear=net and net:FindFirstChild("RF/EggWorld/AskWearTool")
 local sell=net and net:FindFirstChild("RE/PetSatchel/SellPet")
-if not wear or not sell then return 0 end
+if not wear or not sell then t("[AutoSell] Sell remotes missing",tostring(wear~=nil),tostring(sell~=nil)) return 0 end
 local sh=rs:FindFirstChild("Shared")
 local dt=rs:FindFirstChild("Data")
-if not sh or not dt then return 0 end
-if not h.sellSave then local sOK,sM=pcall(require,sh:FindFirstChild("Save")) if sOK and sM then h.sellSave=sM end end
-if not h.sellAssets then local aOK,aM=pcall(require,dt:FindFirstChild("Assets")) if aOK and aM then h.sellAssets=aM end end
+if not sh or not dt then t("[AutoSell] Shared/Data folders missing") return 0 end
+if not h.sellSave then local sOK,sM=pcall(require,sh:FindFirstChild("Save")) if sOK and sM then h.sellSave=sM else t("[AutoSell] Save module require failed") end end
+if not h.sellAssets then local aOK,aM=pcall(require,dt:FindFirstChild("Assets")) if aOK and aM then h.sellAssets=aM else t("[AutoSell] Assets module require failed") end end
 if not h.sellSave or not h.sellAssets then return 0 end
 local gOK,data=pcall(h.sellSave.Get)
-if not gOK or type(data)~="table" then return 0 end
+if not gOK or type(data)~="table" then t("[AutoSell] Save.Get() failed") return 0 end
+if not h.sellDiagDone then
+h.sellDiagDone=true
+local kl={} for k,v in pairs(data) do kl[#kl+1]=tostring(k) end
+t("[AutoSell] Save top-level keys: "..table.concat(kl,","))
+end
 local sold=0
 for _,k in ipairs(invKeys) do
 local inv=data[k]
 if type(inv)=="table" then
+if not h.sellDiagKeys then h.sellDiagKeys={} end
+if not h.sellDiagKeys[k] then
+h.sellDiagKeys[k]=true
+local cnt=0 local samp=nil
+for uid,ed in pairs(inv) do cnt=cnt+1 if samp==nil and type(ed)=="table" then samp=uid end end
+t(string.format("[AutoSell] Inventory '%s' entries: %d",tostring(k),cnt))
+if samp~=nil then
+local ed=inv[samp]
+local fk={} for f,v in pairs(ed) do fk[#fk+1]=tostring(f) end
+t(string.format("[AutoSell] Sample entry fields: %s",table.concat(fk,",")))
+local cat=ed.AssetCategory
+t(string.format("[AutoSell] Sample AssetCategory=%s Placement=%s",tostring(cat),tostring(ed.Placement)))
+if cat~=nil and h.sellAssets.Directory and h.sellAssets.Directory[cat] then
+local rr=h.sellAssets.Directory[cat].Rarity
+t(string.format("[AutoSell] Sample rarity DisplayName=%s",tostring(rr and rr.DisplayName)))
+else
+t("[AutoSell] Sample category NOT found in Assets.Directory")
+end
+end
+end
 for uid,ed in pairs(inv) do
 if type(ed)=="table" and not ed.Placement and not ed.Favourite and not ed.Favorite then
 local cat=ed.AssetCategory
 local rar=nil
+if cat~=nil then
 pcall(function() local d=h.sellAssets.Directory local e2=d and d[cat] local r2=e2 and e2.Rarity rar=r2 and r2.DisplayName end)
-if not rar then pcall(function() local e2=p.Assets and p.Assets[cat] rar=e2 and e2.Rarity end) end
-if rar then
+if rar==nil then pcall(function() local e2=p.Assets and p.Assets[cat] rar=e2 and e2.Rarity end) end
+end
+if rar==nil then
+t(string.format("[AutoSell] Skip %s: rarity unresolvable (cat=%s)",tostring(uid),tostring(cat)))
+else
 local rl=string.lower(tostring(rar))
+local matched=false
 for _,rn in ipairs(X) do
-if rarMap[rn] and string.find(rl,string.lower(rn)) then
-pcall(function() wear:InvokeServer(uid) end)
-pcall(function() sell:FireServer({uid}) end)
+if rarMap[rn] and string.find(rl,string.lower(rn)) then matched=true break end
+end
+if matched then
+local wOK=pcall(function() wear:InvokeServer(uid) end)
+task.wait(0.1)
+local sOK=pcall(function() sell:FireServer({uid}) end)
+t(string.format("[AutoSell] Fired sell %s rarity=%s wear=%s sell=%s",tostring(uid),tostring(rar),tostring(wOK),tostring(sOK)))
 sold=sold+1
-task.wait(0.5)
-break
+task.wait(0.1)
 end
 end
 end
 end
-end
+else
+t(string.format("[AutoSell] Inventory key '%s' missing or empty",tostring(k)))
 end
 end
 return sold
@@ -3812,6 +3863,27 @@ end
             if (h.pureTweenFarm or h.autoFarmLoop) and not (h.securingEgg or h.teleporting or h.isBatchPlacing) then
                 local c=o.Character local hr=c and c:FindFirstChild ( "HumanoidRootPart" )
                 if hr then d4(nil,hr.Position) end
+            end
+        end)
+    end
+end
+)task.spawn (function(...)
+    while h.alive do
+        task.wait ( 1 )
+        pcall(function(...)
+            if h.onTreadmill and not L4() then h.onTreadmill = false end
+            if h.teleporting and os.clock ()-(h.stateTime or 0 )>30 then t( "[Watchdog] Teleport stuck over 30s, resetting..." )D4() end
+            if not h.autoTreadmill then return end
+            local busy=h.teleporting or h.glidingToTarget or h.securingEgg or h.delivering or h.isReturning or h.holdingEggForGuard
+            local onMill=L4()
+            if (h.pureTweenFarm or h.autoFarmLoop) then
+                if busy then
+                    if onMill then M4() end
+                else
+                    if not onMill and os.clock ()-(h.lastTreadmillMount or 0 )>8 then f4() end
+                end
+            else
+                if not onMill and os.clock ()-(h.lastTreadmillMount or 0 )>8 then f4() end
             end
         end)
     end
@@ -4176,7 +4248,7 @@ local function Wk(e,...)
         return r and "à¸à¸³à¸¥à¸±à¸‡à¸šà¸´à¸™à¸à¸¥à¸±à¸š" or "Returning"
     elseif h.glidingToTarget then
         return r and "à¸à¸³à¸¥à¸±à¸‡à¸šà¸´à¸™à¹„à¸›à¸‚à¹‚à¸¡à¸¢" or "Stealing"
-    elseif h.onTreadmill or(L4 and L4())then
+    elseif (L4 and L4())then
         return r and "à¸­à¸¢à¸¹à¹ˆà¸šà¸™à¸¥à¸¹à¹ˆà¸§à¸´à¹ˆà¸‡" or "On Treadmill"
     elseif Y4== "TWEEN" and not h.isReturning then
         return r and "à¸à¸³à¸¥à¸±à¸‡à¸«à¸²à¹„à¸‚à¹ˆ" or "Searching"
@@ -4382,7 +4454,7 @@ local function jM(...)
             elseif y== 85 then
                 t.Text = "Syncing server telemetry..."
             elseif y== 100 then
-                t.Text = "Ready!"
+                t.Text =h.ready and "Ready!" or "Syncing server..."
             end
             task.wait ( 0.008 )
         end
@@ -4757,7 +4829,7 @@ local function oM(...)
         [ "Desc" ]=P.Farm.AutoTreadmillDesc or "Run on base treadmill when no target eggs are spawned" ;
         [ "Icon" ]= "solar:running-bold" ;
         [ "Value" ]=h.autoTreadmill ;
-        [ "Callback" ]=function(e,...) h.autoTreadmill =e x()n4()
+        [ "Callback" ]=function(e,...) if e and not h.ready then j({[ "Title" ]= "Auto Treadmill" ,[ "Content" ]= "Still syncing with server, try again shortly" ,[ "Icon" ]= "x-circle" }) return end h.autoTreadmill =e x()n4()
             if not e and((h.onTreadmill or L4()))then
                 M4()
             end
@@ -4872,7 +4944,7 @@ local function oM(...)
         end
         })Fk.secFlight =Yk:Section({[ "Title" ]=P.Character.SecFlight })Fk.sliderSpeed =Yk:Slider({[ "Title" ]=P.Character.SpeedTitle ,[ "Desc" ]=P.Character.SpeedDesc ,[ "Step" ]= 25 ,[ "Value" ]={[ "Min" ]= 100 ;
         [ "Max" ]= 1000 ;
-        [ "Default" ]=h.glideSpeed or 600 },[ "Callback" ]=function(e,...) h.glideSpeed =e Y(e) end })Fk.sliderReturnHeight =Yk:Slider({[ "Title" ]= "Return Height" ,[ "Desc" ]= "Height used when returning to base (1-100). Outbound flight ignores it." ,[ "Step" ]= 5 ,[ "Value" ]={[ "Min" ]= 1 ;[ "Max" ]= 100 ;[ "Default" ]=h.returnHeight or 70 },[ "Callback" ]=function(e,...) h.returnHeight =math.clamp (e or 70 , 1 , 100 )x()h.statusText =string.format ( "Return Height: %d" ,h.returnHeight ) end })Fk.secDashboard =Tk:Section({[ "Title" ]=P.Settings.SecDashboard })Fk.paraLiveDash =Tk:Paragraph({[ "Title" ]=P.Settings.DashTitle ;
+        [ "Default" ]=h.glideSpeed or 600 },[ "Callback" ]=function(e,...) h.glideSpeed =e Y(e) end })Fk.secDashboard =Tk:Section({[ "Title" ]=P.Settings.SecDashboard })Fk.paraLiveDash =Tk:Paragraph({[ "Title" ]=P.Settings.DashTitle ;
         [ "Desc" ]=string.format ( "Status: Ready\nFarm Mode: Idle\nCarried Eggs: 0\nFlight Speed: %d Studs/s" ,h.glideSpeed or 600 )})Fk.secUI =Tk:Section({[ "Title" ]=P.Settings.SecUI })Fk.dropLang =Tk:Dropdown({[ "Title" ]=P.Settings.LangTitle ,[ "Values" ]={ "English" , "Thai" },[ "Value" ]=(Xk== "EN" and "English" or "Thai" ),[ "Callback" ]=function(e,...)
             local r=(e== "Thai" )and "TH" or "EN"
             if r~=Xk then
@@ -5134,7 +5206,7 @@ local function oM(...)
     end
     )b( "Auto Return" , "Automatically return to safe area after stealing" ,h.autoGlide ,Color3.fromRGB(205, 100, 120), 23 ,function(e,...) h.autoGlide =e
     end
-    )b( "Auto Treadmill" , "Run on base treadmill when no target eggs are spawned" ,h.autoTreadmill ,Color3.fromRGB(211, 92, 122), 24 ,function(e,...) h.autoTreadmill =e x()n4()
+    )b( "Auto Treadmill" , "Run on base treadmill when no target eggs are spawned" ,h.autoTreadmill ,Color3.fromRGB(211, 92, 122), 24 ,function(e,...) if e and not h.ready then h.statusText = "[Boot] Still syncing..." return end h.autoTreadmill =e x()n4()
         if not e and((h.onTreadmill or L4()))then
             M4()
         end
@@ -5157,7 +5229,7 @@ local function oM(...)
     end
     )m.MouseButton1Click :Connect(function(...) h.glideSpeed =math.min ( 1000 ,((h.glideSpeed or 600 ))+ 25 )T.Text =string.format ( "%d Studs/s" ,h.glideSpeed )Y(h.glideSpeed )
     end
-    )local F2=Instance.new ( "Frame" )F2.Size =UDim2.new ( 1 , 0 , 0 , 48 )F2.BackgroundColor3 =t F2.LayoutOrder = 41.5 F2.Parent =n;(Instance.new ( "UICorner" ,F2)).CornerRadius =UDim.new ( 0 , 8 )local O2=Instance.new ( "TextLabel" )O2.Size =UDim2.new ( 1 , -130 , 0 , 18 )O2.Position =UDim2.new ( 0 , 10 , 0 , 6 )O2.BackgroundTransparency = 1 O2.Text = "Return Height" O2.TextColor3 =B O2.TextSize = 13 O2.Font =Enum.Font.GothamBold O2.TextXAlignment =Enum.TextXAlignment.Left O2.AutoLocalize = false O2.Parent =F2 local T2=Instance.new ( "TextLabel" )T2.Size =UDim2.new ( 0 , 70 , 0 , 24 )T2.Position =UDim2.new ( 1 , -80 , 0.5 , -12 )T2.BackgroundColor3 =V T2.Text =string.format ( "%d" ,h.returnHeight or 70 )T2.TextColor3 =Color3.fromRGB(232, 160, 181)T2.TextSize = 11 T2.Font =Enum.Font.GothamBold T2.AutoLocalize = false T2.Parent =F2;(Instance.new ( "UICorner" ,T2)).CornerRadius =UDim.new ( 0 , 6 )local W2=Instance.new ( "TextButton" )W2.Size =UDim2.new ( 0 , 24 , 0 , 24 )W2.Position =UDim2.new ( 1 , -110 , 0.5 , -12 )W2.BackgroundColor3 =s W2.Text = "-" W2.TextColor3 =B W2.TextSize = 14 W2.Font =Enum.Font.GothamBold W2.Parent =F2;(Instance.new ( "UICorner" ,W2)).CornerRadius =UDim.new ( 0 , 6 )local m2=Instance.new ( "TextButton" )m2.Size =UDim2.new ( 0 , 24 , 0 , 24 )m2.Position =UDim2.new ( 1 , -138 , 0.5 , -12 )m2.BackgroundColor3 =s m2.Text = "+" m2.TextColor3 =B m2.TextSize = 14 m2.Font =Enum.Font.GothamBold m2.Parent =F2;(Instance.new ( "UICorner" ,m2)).CornerRadius =UDim.new ( 0 , 6 )W2.MouseButton1Click :Connect(function(...) h.returnHeight =math.max ( 1 ,((h.returnHeight or 70 ))- 5 )T2.Text =string.format ( "%d" ,h.returnHeight )x()h.statusText =string.format ( "Return Height: %d" ,h.returnHeight ) end )m2.MouseButton1Click :Connect(function(...) h.returnHeight =math.min ( 100 ,((h.returnHeight or 70 ))+ 5 )T2.Text =string.format ( "%d" ,h.returnHeight )x()h.statusText =string.format ( "Return Height: %d" ,h.returnHeight ) end )A( "Reset Character State" , "Clear velocity, cancel push & unfreeze" ,Color3.fromRGB(145, 48, 73), 42 ,function(...) pcall(D4)pcall(u4)
+    )A( "Reset Character State" , "Clear velocity, cancel push & unfreeze" ,Color3.fromRGB(145, 48, 73), 42 ,function(...) pcall(D4)pcall(u4)
     end
     )A( "Unload Script" , "Destroy UI and stop all background loops" ,Color3.fromRGB(145, 48, 73), 43 ,function(...) aM()
     end
