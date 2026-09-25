@@ -206,7 +206,7 @@ local function T(...)
         e={[ "selectedZones" ]=r;
         [ "selectedRarities" ]=y,[ "alwaysCollectSecretPlus" ]= true ,[ "minRarityTier" ]= 2 ;
         [ "autoTreadmill" ]= true ; [ "autoUpgradeTreadmill" ]= true ,[ "autoBuyTrails" ]= true ; [ "hideNotEnoughMoney" ]= true ;
-        [ "performanceMode" ]= false ,[ "disable3D" ]= false ,[ "antiAFK" ]= true ,[ "language" ]= "EN" }
+        [ "performanceMode" ]= false ,[ "disable3D" ]= false ,[ "antiAFK" ]= true ,[ "returnHeight" ]= 70 ,[ "autoSellEgg" ]= false ,[ "autoSellPet" ]= false ,[ "sellEggRarities" ]={},[ "sellPetRarities" ]={},[ "language" ]= "EN" }
     else
         if type(e.selectedZones )~= "table" then
             e.selectedZones =r
@@ -242,7 +242,7 @@ local function T(...)
         if e.disable3D ==nil then
             e.disable3D = false
         end
-        if e.antiAFK ==nil then e.antiAFK = true end    
+        if e.antiAFK ==nil then e.antiAFK = true end if e.autoSellEgg ==nil then e.autoSellEgg = false end if e.autoSellPet ==nil then e.autoSellPet = false end if type(e.sellEggRarities )~= "table" then e.sellEggRarities ={} end if type(e.sellPetRarities )~= "table" then e.sellPetRarities ={} end if e.returnHeight ==nil then e.returnHeight = 70 end    
         if e.language and((e.language == "EN" or e.language == "TH" ))then
             currentLang=e.language
         end
@@ -258,7 +258,7 @@ local function x(...) pcall(function(...)
             [ "hideNotEnoughMoney" ]=(h.hideNotEnoughMoney == true );
             [ "performanceMode" ]=(h.performanceMode == true );
             [ "disable3D" ]=(h.disable3D == true );
-            [ "antiAFK" ]=(h.antiAFK == true );
+            [ "antiAFK" ]=(h.antiAFK == true ),[ "returnHeight" ]=math.clamp (tonumber(h.returnHeight )or 70 , 1 , 100 ),[ "autoSellEgg" ]=(h.autoSellEgg == true ),[ "autoSellPet" ]=(h.autoSellPet == true ),[ "sellEggRarities" ]=h.sellEggRarities or{},[ "sellPetRarities" ]=h.sellPetRarities or{};
             [ "language" ]=currentLang or "EN" }
             local y=a:JSONEncode(r)writefile(z,y)
         end
@@ -275,7 +275,7 @@ local W=T()h={[ "godmode" ]= true ,[ "autoGlide" ]= true ,[ "autoHatch" ]= false
 [ "selectedRarities" ]=W.selectedRarities ;
 [ "alwaysCollectSecretPlus" ]=W.alwaysCollectSecretPlus ,[ "minRarityTier" ]=W.minRarityTier ,[ "autoTreadmill" ]=(W.autoTreadmill ~= false );
 [ "autoUpgradeTreadmill" ]=(W.autoUpgradeTreadmill ~= false ),[ "autoBuyTrails" ]=(W.autoBuyTrails ~= false ),[ "hideNotEnoughMoney" ]=(W.hideNotEnoughMoney ~= false );
-[ "performanceMode" ]=(W.performanceMode == true ),[ "disable3D" ]=(W.disable3D == true ),[ "antiAFK" ]= true ,[ "onTreadmill" ]= false ,[ "lastTreadmillMount" ]= 0 ,[ "laneZ" ]= -360 ,[ "swapped" ]= false ;
+[ "performanceMode" ]=(W.performanceMode == true ),[ "disable3D" ]=(W.disable3D == true ),[ "antiAFK" ]= true ,[ "returnHeight" ]=W.returnHeight or 70 ,[ "autoSellEgg" ]=(W.autoSellEgg == true ),[ "autoSellPet" ]=(W.autoSellPet == true ),[ "sellEggRarities" ]=W.sellEggRarities or{},[ "sellPetRarities" ]=W.sellPetRarities or{},[ "onTreadmill" ]= false ,[ "lastTreadmillMount" ]= 0 ,[ "laneZ" ]= -360 ,[ "swapped" ]= false ;
 [ "teleporting" ]= false ,[ "isReturning" ]= false ;
 [ "delivering" ]= false ,[ "holdingEggForGuard" ]= false ,[ "currentTargetModel" ]=nil,[ "targetPosition" ]=nil;
 [ "stateTime" ]=os.clock (),[ "statusText" ]= "Ready" ,[ "bestEggInfo" ]= "Scanning..." ;
@@ -552,11 +552,11 @@ local function ek(...)
 end
 task.spawn (function(...)
     while true do
-        task.wait ( 1.5 )pcall(ek)
+        task.wait ( 6 )pcall(ek)
     end
 end
 )function h4(e,...) local y=os.clock ()
-    if e or(y-G4>= 1.5 )or not F4 then
+    if e or(y-G4>= 6 )or not F4 then
         ek()
     end
     local u=((F4 and#F4> 0 ))and F4 or nil
@@ -749,7 +749,7 @@ end
 if typeof(hookmetamethod)== "function" and not _G._DesyncAntiRagdollHooked then
     _G._DesyncAntiRagdollHooked = true
     local e e=hookmetamethod(game, "__newindex" ,safeNewCClosure(function(r,y,u,...)
-        if not executorCheckCaller()and typeof(r)== "Instance" then
+        if false and not executorCheckCaller()and typeof(r)== "Instance" then
             if r:IsA( "Motor6D" )and(y== "Enabled" and u== false )then
                 return nil
             end
@@ -776,7 +776,7 @@ S4=function(e,...) e=e or o.Character
         return
     end
     for e,r in ipairs(e:GetDescendants())do
-        if r:IsA( "BallSocketConstraint" )or r:IsA( "HingeConstraint" )or r:IsA( "NoCollisionConstraint" )then
+        if r:IsA( "BallSocketConstraint" )or r:IsA( "HingeConstraint" )or r:IsA( "NoCollisionConstraint" )or(r:IsA( "WeldConstraint" )and string.find (r.Name , "RigidJointWeld_" ))then
             pcall(function(...) r:Destroy()
             end
             )
@@ -785,11 +785,6 @@ S4=function(e,...) e=e or o.Character
     for e,r in ipairs(e:GetDescendants())do
         if r:IsA( "Motor6D" )and(r.Part0 and r.Part1 )then
             r.Enabled = true
-            local e= "RigidJointWeld_" ..r.Name
-            local y=r.Part1 :FindFirstChild(e)
-            if not y then
-                local y=Instance.new ( "WeldConstraint" )y.Name =e y.Part0 =r.Part0 y.Part1 =r.Part1 y.Parent =r.Part1
-            end
         end
     end
 end
@@ -803,13 +798,11 @@ Z4=function(e,...)
     end
     local r=e:FindFirstChildOfClass( "Humanoid" )
     if r then
-        r:SetStateEnabled(Enum.HumanoidStateType.Ragdoll , false )r:SetStateEnabled(Enum.HumanoidStateType.FallingDown , false )r:SetStateEnabled(Enum.HumanoidStateType.Physics , false )r:SetStateEnabled(Enum.HumanoidStateType.PlatformStanding , false )r:SetStateEnabled(Enum.HumanoidStateType.Seated , false )
+        r:SetStateEnabled(Enum.HumanoidStateType.Ragdoll , false )r:SetStateEnabled(Enum.HumanoidStateType.FallingDown , false )r:SetStateEnabled(Enum.HumanoidStateType.Physics , false )r:SetStateEnabled(Enum.HumanoidStateType.PlatformStanding , false )
         if r.PlatformStand then
             r.PlatformStand = false
         end
-        if r.Sit then
-            r.Sit = false
-        end
+        
     end
     for e,r in ipairs(e:GetDescendants())do
         if r:IsA( "LocalScript" )and((string.find (string.lower (r.Name ), "ragdoll" )or string.find (string.lower (r.Name ), "fall" )))then
@@ -823,16 +816,6 @@ z4=function(e,...)
         return
     end
     Z4(e)
-    for e,y in ipairs(e:GetDescendants())do
-        if y:IsA( "Motor6D" )then
-            (y:GetPropertyChangedSignal( "Enabled" )):Connect(function(...)
-                if not y.Enabled then
-                    y.Enabled = true
-                end
-            end
-            )
-        end
-    end
     e.DescendantAdded :Connect(function(y,...)
         if y:IsA( "BallSocketConstraint" )or y:IsA( "HingeConstraint" )or y:IsA( "NoCollisionConstraint" )then
             task.defer (function(...) pcall(function(...) y:Destroy()
@@ -1190,7 +1173,7 @@ A4=function(...)
         return false
     end
     pcall(function(...) y.BreakJointsOnDeath = false
-        local w=y:Clone()w.Parent =e y:Destroy()
+        local w=y
         local j=w:FindFirstChildOfClass( "Animator" )
         if not j then
             j=Instance.new ( "Animator" )j.Parent =w
@@ -1573,7 +1556,7 @@ g4=function(e,r,u,...)
     if k then
         k.AutoRotate = false
     end
-    local a=s4()e=math.max ( 100 ,e or h.glideSpeed or 600 )
+    local a=s4()a=Vector3.new (a.X ,math.clamp (h.returnHeight or 70 , 1 , 100 ),a.Z )e=math.max ( 100 ,e or h.glideSpeed or 600 )
     local V=h.laneZ or L h.isReturning = true h.stateTime =os.clock ()V4(a, 20 )j.AssemblyLinearVelocity =Vector3.zero j.AssemblyAngularVelocity =Vector3.zero
     local H=o4()
     local t=math.max (e,H)
@@ -1855,7 +1838,7 @@ Q4=function(e,r,...)
         j.AutoRotate = false
     end
     local k=h.laneZ or L
-    local a=Vector3.new (E- 10 , 70 ,k)e=math.max ( 100 ,e or h.glideSpeed or 350 )h.isReturning = true h.stateTime =os.clock ()V4(Vector3.new (E, 70 ,k), 20 )pcall(u4)w.AssemblyLinearVelocity =Vector3.zero w.AssemblyAngularVelocity =Vector3.zero
+    local a=Vector3.new (E- 10 ,math.clamp (h.returnHeight or 70 , 1 , 100 ),k)e=math.max ( 100 ,e or h.glideSpeed or 350 )h.isReturning = true h.stateTime =os.clock ()V4(Vector3.new (E,math.clamp (h.returnHeight or 70 , 1 , 100 ),k), 20 )pcall(u4)w.AssemblyLinearVelocity =Vector3.zero w.AssemblyAngularVelocity =Vector3.zero
     local V=o4()
     local H=math.max (e,V)
     local s=os.clock ()+ 15
@@ -3194,12 +3177,12 @@ U4=function(e,u,w,j,...)
             end
         end
         k:PivotTo(u*CFrame.new ( 0 , 0.4 , 0 ))d4(w,s)
-        if e and i then
+        if e and i and os.clock ()-(h.lastCarry or 0 )>0.5 then h.lastCarry =os.clock ()
             task.spawn (function(...) pcall(function(...)
                     if i:IsA( "RemoteFunction" )then
-                        i:InvokeServer({[ "Uid" ]=e})i:InvokeServer(e)
+                        i:InvokeServer({[ "Uid" ]=e})
                     else
-                        i:FireServer({[ "Uid" ]=e})i:FireServer(e)
+                        i:FireServer({[ "Uid" ]=e})
                     end
                 end
                 )
@@ -3254,12 +3237,12 @@ U4=function(e,u,w,j,...)
             break
         end
         k:PivotTo(u*CFrame.new ( 0 , 0.4 , 0 ))d4(w,s)
-        if e and i then
+        if e and i and os.clock ()-(h.lastCarry or 0 )>0.5 then h.lastCarry =os.clock ()
             task.spawn (function(...) pcall(function(...)
                     if i:IsA( "RemoteFunction" )then
-                        i:InvokeServer({[ "Uid" ]=e})i:InvokeServer(e)
+                        i:InvokeServer({[ "Uid" ]=e})
                     else
-                        i:FireServer({[ "Uid" ]=e})i:FireServer(e)
+                        i:FireServer({[ "Uid" ]=e})
                     end
                 end
                 )
@@ -3356,7 +3339,7 @@ l4=function(e,u,...)
                 return false
             end
             d4(e.Model ,e.Position )
-            if e.Uid and i then
+            if e.Uid and i and os.clock ()-(h.lastCarry or 0 )>0.5 then h.lastCarry =os.clock ()
                 task.spawn (function(...) pcall(function(...)
                         if i:IsA( "RemoteFunction" )then
                             i:InvokeServer({[ "Uid" ]=e.Uid })
@@ -3716,9 +3699,66 @@ end
         )task.wait ( 5 )
     end
 end
-)task.spawn (function(...)
+)
+local function SellScan(invKeys,rarMap)
+if not rarMap then return 0 end
+local has=false
+for _,v in pairs(rarMap) do if v then has=true break end end
+if not has then return 0 end
+local rs=game:GetService("ReplicatedStorage")
+local pkgs=rs and rs:FindFirstChild("Packages")
+local net=pkgs and pkgs:FindFirstChild("Networking")
+local wear=net and net:FindFirstChild("RF/EggWorld/AskWearTool")
+local sell=net and net:FindFirstChild("RE/PetSatchel/SellPet")
+if not wear or not sell then return 0 end
+local sh=rs:FindFirstChild("Shared")
+local dt=rs:FindFirstChild("Data")
+if not sh or not dt then return 0 end
+if not h.sellSave then local sOK,sM=pcall(require,sh:FindFirstChild("Save")) if sOK and sM then h.sellSave=sM end end
+if not h.sellAssets then local aOK,aM=pcall(require,dt:FindFirstChild("Assets")) if aOK and aM then h.sellAssets=aM end end
+if not h.sellSave or not h.sellAssets then return 0 end
+local gOK,data=pcall(h.sellSave.Get)
+if not gOK or type(data)~="table" then return 0 end
+local sold=0
+for _,k in ipairs(invKeys) do
+local inv=data[k]
+if type(inv)=="table" then
+for uid,ed in pairs(inv) do
+if type(ed)=="table" and not ed.Placement and not ed.Favourite and not ed.Favorite then
+local cat=ed.AssetCategory
+local rar=nil
+pcall(function() local d=h.sellAssets.Directory local e2=d and d[cat] local r2=e2 and e2.Rarity rar=r2 and r2.DisplayName end)
+if not rar then pcall(function() local e2=p.Assets and p.Assets[cat] rar=e2 and e2.Rarity end) end
+if rar then
+local rl=string.lower(tostring(rar))
+for _,rn in ipairs(X) do
+if rarMap[rn] and string.find(rl,string.lower(rn)) then
+pcall(function() wear:InvokeServer(uid) end)
+pcall(function() sell:FireServer({uid}) end)
+sold=sold+1
+task.wait(0.5)
+break
+end
+end
+end
+end
+end
+end
+end
+return sold
+end
+task.spawn (function(...)
     while h.alive do
-        if h.autoHatch and(not h.securingEgg and(not h.teleporting and not h.isHatching ))then
+        task.wait ( 3 )
+        if h.autoSellEgg then
+            pcall(SellScan,{ "EggInventory" },h.sellEggRarities)
+        end
+        if h.autoSellPet then
+            pcall(SellScan,{ "PetInventory" , "Pets" , "PetSatchel" },h.sellPetRarities)
+        end
+    end
+end
+)task.spawn (function(...) while h.alive do if h.autoHatch and(not h.securingEgg and(not h.teleporting and not h.isHatching ))then
             pcall(function(...) J4( false )
             end
             )
@@ -3871,7 +3911,7 @@ y.Heartbeat :Connect(function(...)
         return
     end 
     if y and not((h and h.onTreadmill ))then
-        if y.PlatformStand then
+        if y.PlatformStand and((h.pureTweenFarm or h.autoFarmLoop or h.isReturning or h.glidingToTarget ))then
             y.PlatformStand = false y:ChangeState(Enum.HumanoidStateType.Running )
         end
         if y.Sit and((h.pureTweenFarm or h.autoFarmLoop or h.isReturning or h.glidingToTarget ))then
@@ -4167,7 +4207,7 @@ local function rM(e,r,y,...) pcall(function(...)
             end
             local a=y
             if not a then
-                local e,y,u=r:ToHSV()a=Color3.fromHSV (e,math.clamp (y* 0.4 , 0.18 , 0.45 ), 0.18 )
+                local e,y,u=r:ToHSV()a=Color3.fromHSV (e,math.clamp (y* 0.4 , 0.18 , 0.45 ), 0.32 )
             end
             u.ThemeTag =nil u.ImageColor3 =a u.ImageTransparency = 0.08
         end
@@ -4260,13 +4300,13 @@ local function jM(...)
     if not e.Parent then
         e.Parent =game:GetService( "CoreGui" )
     end
-    local r=Instance.new ( "Frame" )r.Name = "Card" r.Size =UDim2.fromOffset ( 336 , 140 )r.Position =UDim2.new ( 0.5 , -168 , 0.5 , -70 )r.BackgroundColor3 =Color3.fromRGB(28, 21, 27)r.BorderSizePixel = 0 r.Parent =e;
+    local r=Instance.new ( "Frame" )r.Name = "Card" r.Size =UDim2.fromOffset ( 336 , 140 )r.Position =UDim2.new ( 0.5 , -168 , 0.5 , -70 )r.BackgroundColor3 =Color3.fromRGB(46, 24, 32)r.BorderSizePixel = 0 r.Parent =e;
     (Instance.new ( "UICorner" ,r)).CornerRadius =UDim.new ( 0 , 14 )
     local y=Instance.new ( "UIStroke" ,r)y.Color =Color3.fromRGB(184, 67, 95)y.Thickness = 1.4 y.ApplyStrokeMode =Enum.ApplyStrokeMode.Border
     local w=Instance.new ( "TextLabel" )w.Size =UDim2.new ( 1 , -28 , 0 , 24 )w.Position =UDim2.new ( 0 , 14 , 0 , 14 )w.BackgroundTransparency = 1 w.Text = "Cheat Ni Mong - Jay" w.TextColor3 =Color3.fromRGB(245, 230, 234)w.TextSize = 18 w.Font =Enum.Font.GothamBold w.TextXAlignment =Enum.TextXAlignment.Left w.AutoLocalize = false w.Parent =r
-    local j=Instance.new ( "TextLabel" )j.Size =UDim2.new ( 1 , -28 , 0 , 16 )j.Position =UDim2.new ( 0 , 14 , 0 , 38 )j.BackgroundTransparency = 1 j.Text = "Steal an Egg Suite v42.64" j.TextColor3 =Color3.fromRGB(130, 125, 135)j.TextSize = 12 j.Font =Enum.Font.Gotham j.TextXAlignment =Enum.TextXAlignment.Left j.AutoLocalize = false j.Parent =r
+    local j=Instance.new ( "TextLabel" )j.Size =UDim2.new ( 1 , -28 , 0 , 16 )j.Position =UDim2.new ( 0 , 14 , 0 , 38 )j.BackgroundTransparency = 1 j.Text = "Steal an Egg Suite v42.64" j.TextColor3 =Color3.fromRGB(168, 155, 160)j.TextSize = 12 j.Font =Enum.Font.Gotham j.TextXAlignment =Enum.TextXAlignment.Left j.AutoLocalize = false j.Parent =r
     local k=Instance.new ( "TextLabel" )k.Size =UDim2.new ( 0 , 50 , 0 , 24 )k.Position =UDim2.new ( 1 , -64 , 0 , 14 )k.BackgroundTransparency = 1 k.Text = "0%" k.TextColor3 =Color3.fromRGB(232, 160, 181)k.TextSize = 14 k.Font =Enum.Font.GothamBold k.TextXAlignment =Enum.TextXAlignment.Right k.AutoLocalize = false k.Parent =r
-    local a=Instance.new ( "Frame" )a.Size =UDim2.new ( 1 , -28 , 0 , 10 )a.Position =UDim2.new ( 0 , 14 , 0 , 74 )a.BackgroundColor3 =Color3.fromRGB(38, 30, 38)a.BorderSizePixel = 0 a.Parent =r;
+    local a=Instance.new ( "Frame" )a.Size =UDim2.new ( 1 , -28 , 0 , 10 )a.Position =UDim2.new ( 0 , 14 , 0 , 74 )a.BackgroundColor3 =Color3.fromRGB(78, 48, 62)a.BorderSizePixel = 0 a.Parent =r;
     (Instance.new ( "UICorner" ,a)).CornerRadius =UDim.new ( 0 , 5 )
     local V=Instance.new ( "Frame" )V.Size =UDim2.new ( 0 , 0 , 1 , 0 )V.BackgroundColor3 =Color3.fromRGB(184, 67, 95)V.BorderSizePixel = 0 V.Parent =a;
     (Instance.new ( "UICorner" ,V)).CornerRadius =UDim.new ( 0 , 5 )
@@ -4321,7 +4361,7 @@ end
 if not kM.Gui.Parent then
     kM.Gui.Parent =game:GetService( "CoreGui" )
 end
-kM.Btn =Instance.new ( "ImageButton" )kM.Btn.Name = "CNMJ_SquareLogoButton" kM.Btn.Size =UDim2.fromOffset ( 46 , 46 )kM.Btn.Position =UDim2.new ( 0 , 20 , 0 , 20 )kM.Btn.BackgroundColor3 =Color3.fromRGB(28, 21, 27)kM.Btn.Active = true kM.Btn.Selectable = true kM.Btn.Visible = false kM.Btn.ZIndex = 999999 kM.Btn.AutoLocalize = false kM.Btn.Parent =kM.Gui ;
+kM.Btn =Instance.new ( "ImageButton" )kM.Btn.Name = "CNMJ_SquareLogoButton" kM.Btn.Size =UDim2.fromOffset ( 46 , 46 )kM.Btn.Position =UDim2.new ( 0 , 20 , 0 , 20 )kM.Btn.BackgroundColor3 =Color3.fromRGB(46, 24, 32)kM.Btn.Active = true kM.Btn.Selectable = true kM.Btn.Visible = false kM.Btn.ZIndex = 999999 kM.Btn.AutoLocalize = false kM.Btn.Parent =kM.Gui ;
 (Instance.new ( "UICorner" ,kM.Btn )).CornerRadius =UDim.new ( 0 , 10 )kM.Stroke =Instance.new ( "UIStroke" ,kM.Btn )kM.Stroke.Color =Color3.fromRGB(184, 67, 95)kM.Stroke.Thickness = 1.6 kM.Stroke.ApplyStrokeMode =Enum.ApplyStrokeMode.Border kM.Logo =Instance.new ( "ImageLabel" ,kM.Btn )kM.Logo.Name = "LogoIcon" kM.Logo.Size =UDim2.fromOffset ( 36 , 36 )kM.Logo.Position =UDim2.new ( 0.5 , 0 , 0.5 , 0 )kM.Logo.AnchorPoint =Vector2.new ( 0.5 , 0.5 )kM.Logo.BackgroundTransparency = 1 kM.Logo.Image =dk kM.Logo.ImageColor3 =Color3.fromRGB ( 255 , 255 , 255 )kM.Logo.ZIndex = 1000000 ;
 (Instance.new ( "UICorner" ,kM.Logo )).CornerRadius =UDim.new ( 0 , 8 )kM.isDragging = false kM.dragStart =nil kM.startPos =nil kM.Btn.InputBegan :Connect(function(e,...)
     if e.UserInputType ==Enum.UserInputType.MouseButton1 or e.UserInputType ==Enum.UserInputType.Touch then
@@ -4419,7 +4459,7 @@ local function oM(...)
         [ "Author" ]= "Cheat Ni Mong - Jay" ;
         [ "Folder" ]= "CNMJ_StealAnEgg" ;
         [ "Icon" ]=dk;
-        [ "Theme" ]= "Dark" ,[ "IconSize" ]= 28 ,[ "Size" ]=s,[ "MinSize" ]=Vector2.new ( 400 , 240 );
+        [ "Theme" ]= "Rose" ,[ "IconSize" ]= 28 ,[ "Size" ]=s,[ "MinSize" ]=Vector2.new ( 400 , 240 );
         [ "MaxSize" ]=Vector2.new ( 900 , 600 ),[ "Resizable" ]= true ,[ "SideBarWidth" ]=V and 140 or 160 ,[ "ToggleKey" ]=Enum.KeyCode.RightShift ;
         [ "IgnoreAlerts" ]= true ,[ "Topbar" ]={[ "Height" ]= 44 ,[ "ButtonsType" ]= "Default" }})
         Window=p
@@ -4430,7 +4470,7 @@ local function oM(...)
         end
         )
         local B=p:Tag({[ "Title" ]= "Status: Ready" ;
-        [ "Color" ]=Color3.fromRGB ( 0 , 255 , 160 ),[ "Border" ]= true })
+        [ "Color" ]=Color3.fromRGB ( 184 , 67 , 95 ),[ "Border" ]= true })
         local J= 44
         local K= false
         local c= false
@@ -4585,7 +4625,7 @@ local function oM(...)
         [ "Icon" ]= "solar:box-minimalistic-bold" })Ok=p:Tab({[ "Title" ]=P.Tabs.EggSelect or "Egg Selection" ;
         [ "Icon" ]= "lucide:egg" })Yk=p:Tab({[ "Title" ]=P.Tabs.Character ;
         [ "Icon" ]= "solar:user-bold" })Tk=p:Tab({[ "Title" ]=P.Tabs.Settings ;
-        [ "Icon" ]= "solar:settings-bold" })Fk.secModes =hk:Section({[ "Title" ]=P.Farm.SecModes })
+        [ "Icon" ]= "solar:settings-bold" })SellTab=p:Tab({[ "Title" ]= "Auto Sell" ; [ "Icon" ]= "solar:box-minimalistic-bold" })Fk.secSellEgg =SellTab:Section({[ "Title" ]= "Auto Sell Egg" })Fk.togSellEgg =SellTab:Toggle({[ "Title" ]= "Auto Sell Eggs" ,[ "Desc" ]= "Automatically sell checked egg rarities" ,[ "Icon" ]= "solar:star-bold" ,[ "Value" ]=h.autoSellEgg ,[ "Callback" ]=function(e,...) h.autoSellEgg =e x() j({[ "Title" ]= "Auto Sell Eggs" ,[ "Content" ]=e and "Auto Sell Eggs enabled" or "Auto Sell Eggs disabled" ,[ "Icon" ]=e and "check-circle" or "x-circle" }) end })Fk.dropSellEgg =SellTab:Dropdown({[ "Title" ]= "Egg Rarities To Sell" ,[ "Desc" ]= "Only checked rarities get sold" ,[ "Values" ]={ "Divine (Tier 6)" , "Eternal (Tier 5)" , "Secret (Tier 4)" , "Cosmic (Tier 3)" , "Mythic (Tier 2)" , "Legendary (Tier 1)" , "Epic" , "Rare" , "Uncommon" , "Common" },[ "Value" ]={},[ "Multi" ]= true ,[ "Callback" ]=function(e,...) local r={} local function y(e2,...) local s=string.lower (tostring(e2 or "" )) for _,u in ipairs(X)do if string.find (s,string.lower (u))then r[u]= true break end end end if type(e)== "table" then for _,v in pairs(e)do y(v) end elseif type(e)== "string" then y(e) end h.sellEggRarities =r x() end })Fk.secSellPet =SellTab:Section({[ "Title" ]= "Auto Sell Pet" })Fk.togSellPet =SellTab:Toggle({[ "Title" ]= "Auto Sell Pets" ,[ "Desc" ]= "Automatically sell checked pet rarities" ,[ "Icon" ]= "solar:star-bold" ,[ "Value" ]=h.autoSellPet ,[ "Callback" ]=function(e,...) h.autoSellPet =e x() j({[ "Title" ]= "Auto Sell Pets" ,[ "Content" ]=e and "Auto Sell Pets enabled" or "Auto Sell Pets disabled" ,[ "Icon" ]=e and "check-circle" or "x-circle" }) end })Fk.dropSellPet =SellTab:Dropdown({[ "Title" ]= "Pet Rarities To Sell" ,[ "Desc" ]= "Only checked rarities get sold" ,[ "Values" ]={ "Divine (Tier 6)" , "Eternal (Tier 5)" , "Secret (Tier 4)" , "Cosmic (Tier 3)" , "Mythic (Tier 2)" , "Legendary (Tier 1)" , "Epic" , "Rare" , "Uncommon" , "Common" },[ "Value" ]={},[ "Multi" ]= true ,[ "Callback" ]=function(e,...) local r={} local function y(e2,...) local s=string.lower (tostring(e2 or "" )) for _,u in ipairs(X)do if string.find (s,string.lower (u))then r[u]= true break end end end if type(e)== "table" then for _,v in pairs(e)do y(v) end elseif type(e)== "string" then y(e) end h.sellPetRarities =r x() end })Fk.secModes =hk:Section({[ "Title" ]=P.Farm.SecModes })
         local N= false
         local U=nil
         local l=nil Fk.togTween =hk:Toggle({[ "Title" ]=P.Farm.TweenTitle ,[ "Desc" ]=P.Farm.TweenDesc ,[ "Icon" ]= "solar:compass-bold" ;
@@ -4774,9 +4814,7 @@ local function oM(...)
         end
         })Fk.secFlight =Yk:Section({[ "Title" ]=P.Character.SecFlight })Fk.sliderSpeed =Yk:Slider({[ "Title" ]=P.Character.SpeedTitle ,[ "Desc" ]=P.Character.SpeedDesc ,[ "Step" ]= 25 ,[ "Value" ]={[ "Min" ]= 100 ;
         [ "Max" ]= 1000 ;
-        [ "Default" ]=h.glideSpeed or 600 },[ "Callback" ]=function(e,...) h.glideSpeed =e Y(e)
-        end
-        })Fk.secDashboard =Tk:Section({[ "Title" ]=P.Settings.SecDashboard })Fk.paraLiveDash =Tk:Paragraph({[ "Title" ]=P.Settings.DashTitle ;
+        [ "Default" ]=h.glideSpeed or 600 },[ "Callback" ]=function(e,...) h.glideSpeed =e Y(e) end })Fk.sliderReturnHeight =Yk:Slider({[ "Title" ]= "Return Height" ,[ "Desc" ]= "Height used when returning to base (1-100). Outbound flight ignores it." ,[ "Step" ]= 5 ,[ "Value" ]={[ "Min" ]= 1 ;[ "Max" ]= 100 ;[ "Default" ]=h.returnHeight or 70 },[ "Callback" ]=function(e,...) h.returnHeight =math.clamp (e or 70 , 1 , 100 )x() end })Fk.secDashboard =Tk:Section({[ "Title" ]=P.Settings.SecDashboard })Fk.paraLiveDash =Tk:Paragraph({[ "Title" ]=P.Settings.DashTitle ;
         [ "Desc" ]=string.format ( "Status: Ready\nFarm Mode: Idle\nCarried Eggs: 0\nFlight Speed: %d Studs/s" ,h.glideSpeed or 600 )})Fk.secUI =Tk:Section({[ "Title" ]=P.Settings.SecUI })Fk.dropLang =Tk:Dropdown({[ "Title" ]=P.Settings.LangTitle ,[ "Values" ]={ "English" , "Thai" },[ "Value" ]=(Xk== "EN" and "English" or "Thai" ),[ "Callback" ]=function(e,...)
             local r=(e== "Thai" )and "TH" or "EN"
             if r~=Xk then
@@ -4792,7 +4830,7 @@ local function oM(...)
         })Fk.dropTheme =Tk:Dropdown({[ "Title" ]=P.Settings.ThemeTitle ;
         [ "Values" ]={ "Dark" ;
         "Rose" , "Plant" ;
-        "Red" , "Sky" , "Purple" },[ "Value" ]= "Dark" ;
+        "Red" , "Sky" , "Purple" },[ "Value" ]= "Rose" ;
         [ "Callback" ]=function(e,...) pcall(function(...) r:SetTheme(e)
             end
             )
@@ -4847,9 +4885,9 @@ local function oM(...)
                     if B then
                         local e=Color3.fromRGB(184, 67, 95)
                         if h.securingEgg or h.teleporting then
-                            e=Color3.fromRGB ( 249 , 115 , 22 )
+                            e=Color3.fromRGB ( 211 , 92 , 122 )
                         elseif h.isReturning or h.glidingToTarget then
-                            e=Color3.fromRGB ( 59 , 130 , 246 )
+                            e=Color3.fromRGB ( 205 , 100 , 120 )
                         elseif h.delivering then
                             e=Color3.fromRGB(160, 55, 85)
                         end
@@ -4900,14 +4938,14 @@ local function oM(...)
         k.Parent =a
     end
     h.gui =k
-    local V=Color3.fromRGB(15, 13, 17)
-    local H=Color3.fromRGB(28, 21, 27)
-    local t=Color3.fromRGB(32, 25, 32)
+    local V=Color3.fromRGB(34, 20, 28)
+    local H=Color3.fromRGB(46, 24, 32)
+    local t=Color3.fromRGB(54, 30, 40)
     local s=Color3.fromRGB(58, 38, 48)
     local p=Color3.fromRGB(184, 67, 95)
     local B=Color3.fromRGB(245, 230, 234)
     local J=Color3.fromRGB(168, 155, 160)
-    local K=Color3.fromRGB(38, 30, 38)
+    local K=Color3.fromRGB(78, 48, 62)
     local c=Color3.fromRGB(150, 138, 145)
     local v=Color3.fromRGB ( 255 , 255 , 255 )
     local i= 475
@@ -5042,8 +5080,7 @@ local function oM(...)
         if not e and((h.onTreadmill or L4()))then
             M4()
         end
-    end
-    )E( "CHARACTER & SAFETY" , 30 )b( "Godmode" , "Invincible against attacks and guards" , (h.godmode == true ) ,Color3.fromRGB(184, 67, 95), 31 ,function(e,...)
+    end )b( "Auto Sell Eggs" , "Automatically sell checked egg rarities" ,h.autoSellEgg ,Color3.fromRGB(184, 67, 95), 25 ,function(e,...) h.autoSellEgg =e x() end )b( "Auto Sell Pets" , "Automatically sell checked pet rarities" ,h.autoSellPet ,Color3.fromRGB(184, 67, 95), 26 ,function(e,...) h.autoSellPet =e x() end )E( "CHARACTER & SAFETY" , 30 )b( "Godmode" , "Invincible against attacks and guards" , (h.godmode == true ) ,Color3.fromRGB(184, 67, 95), 31 ,function(e,...)
         if e then
             enableDesyncGodmode()
         else
@@ -5062,9 +5099,9 @@ local function oM(...)
     end
     )m.MouseButton1Click :Connect(function(...) h.glideSpeed =math.min ( 1000 ,((h.glideSpeed or 600 ))+ 25 )T.Text =string.format ( "%d Studs/s" ,h.glideSpeed )Y(h.glideSpeed )
     end
-    )A( "Reset Character State" , "Clear velocity, cancel push & unfreeze" ,Color3.fromRGB(145, 48, 73), 42 ,function(...) pcall(D4)pcall(u4)
+    )local F2=Instance.new ( "Frame" )F2.Size =UDim2.new ( 1 , 0 , 0 , 48 )F2.BackgroundColor3 =t F2.LayoutOrder = 41.5 F2.Parent =n;(Instance.new ( "UICorner" ,F2)).CornerRadius =UDim.new ( 0 , 8 )local O2=Instance.new ( "TextLabel" )O2.Size =UDim2.new ( 1 , -130 , 0 , 18 )O2.Position =UDim2.new ( 0 , 10 , 0 , 6 )O2.BackgroundTransparency = 1 O2.Text = "Return Height" O2.TextColor3 =B O2.TextSize = 13 O2.Font =Enum.Font.GothamBold O2.TextXAlignment =Enum.TextXAlignment.Left O2.AutoLocalize = false O2.Parent =F2 local T2=Instance.new ( "TextLabel" )T2.Size =UDim2.new ( 0 , 70 , 0 , 24 )T2.Position =UDim2.new ( 1 , -80 , 0.5 , -12 )T2.BackgroundColor3 =V T2.Text =string.format ( "%d" ,h.returnHeight or 70 )T2.TextColor3 =Color3.fromRGB(232, 160, 181)T2.TextSize = 11 T2.Font =Enum.Font.GothamBold T2.AutoLocalize = false T2.Parent =F2;(Instance.new ( "UICorner" ,T2)).CornerRadius =UDim.new ( 0 , 6 )local W2=Instance.new ( "TextButton" )W2.Size =UDim2.new ( 0 , 24 , 0 , 24 )W2.Position =UDim2.new ( 1 , -110 , 0.5 , -12 )W2.BackgroundColor3 =s W2.Text = "-" W2.TextColor3 =B W2.TextSize = 14 W2.Font =Enum.Font.GothamBold W2.Parent =F2;(Instance.new ( "UICorner" ,W2)).CornerRadius =UDim.new ( 0 , 6 )local m2=Instance.new ( "TextButton" )m2.Size =UDim2.new ( 0 , 24 , 0 , 24 )m2.Position =UDim2.new ( 1 , -138 , 0.5 , -12 )m2.BackgroundColor3 =s m2.Text = "+" m2.TextColor3 =B m2.TextSize = 14 m2.Font =Enum.Font.GothamBold m2.Parent =F2;(Instance.new ( "UICorner" ,m2)).CornerRadius =UDim.new ( 0 , 6 )W2.MouseButton1Click :Connect(function(...) h.returnHeight =math.max ( 1 ,((h.returnHeight or 70 ))- 5 )T2.Text =string.format ( "%d" ,h.returnHeight )x() end )m2.MouseButton1Click :Connect(function(...) h.returnHeight =math.min ( 100 ,((h.returnHeight or 70 ))+ 5 )T2.Text =string.format ( "%d" ,h.returnHeight )x() end )A( "Reset Character State" , "Clear velocity, cancel push & unfreeze" ,Color3.fromRGB(145, 48, 73), 42 ,function(...) pcall(D4)pcall(u4)
     end
-    )A( "Unload Script" , "Destroy UI and stop all background loops" ,Color3.fromRGB(90, 30, 45), 43 ,function(...) aM()
+    )A( "Unload Script" , "Destroy UI and stop all background loops" ,Color3.fromRGB(145, 48, 73), 43 ,function(...) aM()
     end
     )E( "EGG SELECT (ZONES & RARITIES)" , 45 )
     local e4=Instance.new ( "TextButton" )e4.Size =UDim2.new ( 1 , 0 , 0 , 48 )e4.BackgroundColor3 =t e4.LayoutOrder = 46 e4.Text = "" e4.AutoButtonColor = false e4.Parent =n;
@@ -5081,7 +5118,7 @@ local function oM(...)
     local w4=Instance.new ( "TextLabel" )w4.Size =UDim2.new ( 1 , -50 , 0 , 18 )w4.Position =UDim2.new ( 0 , 10 , 0 , 6 )w4.BackgroundTransparency = 1 w4.Text =string.format ( "[Z] Target Zones (%d/12 Active)" ,r4())w4.TextColor3 =Color3.fromRGB(232, 160, 181)w4.TextSize = 13 w4.Font =Enum.Font.GothamBold w4.TextXAlignment =Enum.TextXAlignment.Left w4.AutoLocalize = false w4.Parent =e4
     local j4=Instance.new ( "TextLabel" )j4.Size =UDim2.new ( 1 , -50 , 0 , 16 )j4.Position =UDim2.new ( 0 , 10 , 0 , 26 )j4.BackgroundTransparency = 1 j4.Text = "Click to expand / collapse zone selection" j4.TextColor3 =J j4.TextSize = 10 j4.Font =Enum.Font.Gotham j4.TextXAlignment =Enum.TextXAlignment.Left j4.AutoLocalize = false j4.Parent =e4
     local k4=Instance.new ( "TextLabel" )k4.Size =UDim2.new ( 0 , 30 , 0 , 30 )k4.Position =UDim2.new ( 1 , -38 , 0.5 , -15 )k4.BackgroundTransparency = 1 k4.Text = "v" k4.TextColor3 =J k4.TextSize = 12 k4.Font =Enum.Font.GothamBold k4.Parent =e4
-    local a4=Instance.new ( "Frame" )a4.Size =UDim2.new ( 1 , 0 , 0 , 0 )a4.BackgroundColor3 =Color3.fromRGB(28, 21, 27)a4.LayoutOrder = 47 a4.Visible = false a4.ClipsDescendants = true a4.Parent =n;
+    local a4=Instance.new ( "Frame" )a4.Size =UDim2.new ( 1 , 0 , 0 , 0 )a4.BackgroundColor3 =Color3.fromRGB(46, 24, 32)a4.LayoutOrder = 47 a4.Visible = false a4.ClipsDescendants = true a4.Parent =n;
     (Instance.new ( "UICorner" ,a4)).CornerRadius =UDim.new ( 0 , 8 )
     local o4=Instance.new ( "UIGridLayout" )o4.CellSize =UDim2.new ( 0.48 , 0 , 0 , 32 )o4.CellPadding =UDim2.new ( 0.04 , 0 , 0 , 6 )o4.SortOrder =Enum.SortOrder.LayoutOrder o4.Parent =a4;
     (Instance.new ( "UIPadding" ,a4)).PaddingTop =UDim.new ( 0 , 8 )a4.UIPadding.PaddingBottom =UDim.new ( 0 , 8 )a4.UIPadding.PaddingLeft =UDim.new ( 0 , 8 )a4.UIPadding.PaddingRight =UDim.new ( 0 , 8 )
@@ -5092,9 +5129,9 @@ local function oM(...)
         local function u(...)
             local e=h.selectedZones and h.selectedZones [r]== true
             if e then
-                y.BackgroundColor3 =d[r]or Color3.fromRGB ( 59 , 130 , 246 )y.TextColor3 =Color3.new ( 1 , 1 , 1 )y.Text = "[X] " ..r
+                y.BackgroundColor3 =d[r]or Color3.fromRGB ( 205 , 100 , 120 )y.TextColor3 =Color3.new ( 1 , 1 , 1 )y.Text = "[X] " ..r
             else
-                y.BackgroundColor3 =Color3.fromRGB(38, 30, 38)y.TextColor3 =Color3.fromRGB(168, 155, 160)y.Text =r
+                y.BackgroundColor3 =Color3.fromRGB(78, 48, 62)y.TextColor3 =Color3.fromRGB(168, 155, 160)y.Text =r
             end
         end
         u()y.MouseButton1Click :Connect(function(...)
@@ -5122,7 +5159,7 @@ local function oM(...)
     local p4=Instance.new ( "TextLabel" )p4.Size =UDim2.new ( 1 , -50 , 0 , 18 )p4.Position =UDim2.new ( 0 , 10 , 0 , 6 )p4.BackgroundTransparency = 1 p4.Text =string.format ( "[R] Target Rarities (%d/%d Active)" ,t4(),#X)p4.TextColor3 =Color3.fromRGB(211, 92, 122)p4.TextSize = 13 p4.Font =Enum.Font.GothamBold p4.TextXAlignment =Enum.TextXAlignment.Left p4.AutoLocalize = false p4.Parent =s4
     local B4=Instance.new ( "TextLabel" )B4.Size =UDim2.new ( 1 , -50 , 0 , 16 )B4.Position =UDim2.new ( 0 , 10 , 0 , 26 )B4.BackgroundTransparency = 1 B4.Text = "Click to expand / collapse rarity selection" B4.TextColor3 =J B4.TextSize = 10 B4.Font =Enum.Font.Gotham B4.TextXAlignment =Enum.TextXAlignment.Left B4.AutoLocalize = false B4.Parent =s4
     local J4=Instance.new ( "TextLabel" )J4.Size =UDim2.new ( 0 , 30 , 0 , 30 )J4.Position =UDim2.new ( 1 , -38 , 0.5 , -15 )J4.BackgroundTransparency = 1 J4.Text = "v" J4.TextColor3 =J J4.TextSize = 12 J4.Font =Enum.Font.GothamBold J4.Parent =s4
-    local K4=Instance.new ( "Frame" )K4.Size =UDim2.new ( 1 , 0 , 0 , 0 )K4.BackgroundColor3 =Color3.fromRGB(28, 21, 27)K4.LayoutOrder = 49 K4.Visible = false K4.ClipsDescendants = true K4.Parent =n;
+    local K4=Instance.new ( "Frame" )K4.Size =UDim2.new ( 1 , 0 , 0 , 0 )K4.BackgroundColor3 =Color3.fromRGB(46, 24, 32)K4.LayoutOrder = 49 K4.Visible = false K4.ClipsDescendants = true K4.Parent =n;
     (Instance.new ( "UICorner" ,K4)).CornerRadius =UDim.new ( 0 , 8 )
     local c4=Instance.new ( "UIGridLayout" )c4.CellSize =UDim2.new ( 0.48 , 0 , 0 , 32 )c4.CellPadding =UDim2.new ( 0.04 , 0 , 0 , 6 )c4.SortOrder =Enum.SortOrder.LayoutOrder c4.Parent =K4;
     (Instance.new ( "UIPadding" ,K4)).PaddingTop =UDim.new ( 0 , 8 )K4.UIPadding.PaddingBottom =UDim.new ( 0 , 8 )K4.UIPadding.PaddingLeft =UDim.new ( 0 , 8 )K4.UIPadding.PaddingRight =UDim.new ( 0 , 8 )
@@ -5134,7 +5171,7 @@ local function oM(...)
             if e then
                 y.BackgroundColor3 =G[r]or Color3.fromRGB(184, 67, 95)y.TextColor3 =Color3.new ( 1 , 1 , 1 )y.Text = "[X] " ..r
             else
-                y.BackgroundColor3 =Color3.fromRGB(38, 30, 38)y.TextColor3 =Color3.fromRGB(168, 155, 160)y.Text =r
+                y.BackgroundColor3 =Color3.fromRGB(78, 48, 62)y.TextColor3 =Color3.fromRGB(168, 155, 160)y.Text =r
             end
         end
         u()y.MouseButton1Click :Connect(function(...)
