@@ -23,8 +23,11 @@ local V=game:GetService( "ProximityPromptService" )pcall(function(...) V.PromptB
 end
 )
 local H=function(...)
+    local a={...} local m="" for i,v in ipairs(a) do m=m..tostring(v) end
+    if m~="" then pcall(function(...) game:GetService("StarterGui"):SetCore("SendNotification",{[ "Title" ]="Cheat Ni Mong - Jay",[ "Text" ]=string.sub(m,1,90),[ "Duration" ]=3}) end) end
 end
 local t=function(...)
+    pcall(function(...) print(...) end)
 end
 local s=nil pcall(function(...) s=require((j:WaitForChild( "Client" , 5 )):WaitForChild( "EggState" , 5 ))
 end
@@ -129,6 +132,14 @@ task.spawn (function(...)
     end)
     h.ready = true h.readyNote = "Ready"
     H(string.format ( "[Boot] Ready: carry=%s snapshot=%s place=%s plot=%s save=%s" ,tostring(i~=nil),tostring(R~=nil),tostring(K~=nil),tostring(h.plot~=nil),tostring(h.sellSave~=nil)))
+end
+)
+task.spawn (function(...)
+    task.wait ( 60 )
+    if not h.ready then
+        h.ready = true h.readyNote = "Ready (forced)"
+        H( "[Boot] Forced ready after 60s; some systems may still be syncing" )
+    end
 end
 )
 
@@ -456,6 +467,9 @@ y4=function(...)
     return e
 end
 u4=function(e,...)
+    if h.selling then
+        return
+    end
     if not e and not((h.pureTweenFarm or h.autoFarmLoop or h.teleporting ))then
         return
     end
@@ -866,7 +880,7 @@ z4=function(e,...)
         end
     end
     )e.ChildAdded :Connect(function(e,...)
-        if e:IsA( "Tool" )and(((h.pureTweenFarm or h.autoFarmLoop ))and not h.holdingEggForGuard )then
+        if e:IsA( "Tool" )and(((h.pureTweenFarm or h.autoFarmLoop ))and not h.holdingEggForGuard and not h.selling )then
             task.defer (function(...) u4()
             end
             )
@@ -1141,6 +1155,10 @@ end
         if u4 and((h.pureTweenFarm or h.autoFarmLoop ))then
             u4()
         end
+    end
+    )pcall(function(...)
+        local c=o.Character local hh=c and c:FindFirstChildOfClass ( "Humanoid" )
+        if hh and (hh.WalkSpeed or 16 )<= 0 then hh.WalkSpeed = 16 end
     end
     )
 end
@@ -3503,8 +3521,11 @@ end
 T4=function(e,...)
     if (e== "TWEEN" or e== "WARP" )and not h.ready then
         H( "[Boot] Still syncing with server, try again in a few seconds..." )h.statusText = "[Boot] Still syncing..."
+        if x4 then pcall(function(...) x4( false ) end) end
+        if W4 then pcall(function(...) W4( false ) end) end
         return
     end
+    if e== "TWEEN" or e== "WARP" then h.lastFarmMode =e end
     if Y4==e then
         return
     end
@@ -3830,6 +3851,7 @@ end
 task.spawn (function(...)
     while h.alive do
         task.wait ( 3 )
+        if h.autoSellEgg or h.autoSellPet then h.selling = true end
         if h.autoSellEgg then
             local ok,n=pcall(SellScan,{ "EggInventory" },h.sellEggRarities)
             if ok then
@@ -3846,6 +3868,7 @@ task.spawn (function(...)
                 h.statusText = "[AutoSell] Pet scan error" t( "[AutoSell] Pet scan error:" ,tostring(n))
             end
         end
+        h.selling = false
     end
 end
 )task.spawn (function(...)
@@ -3872,7 +3895,18 @@ end
         task.wait ( 1 )
         pcall(function(...)
             if h.onTreadmill and not L4() then h.onTreadmill = false end
-            if h.teleporting and os.clock ()-(h.stateTime or 0 )>30 then t( "[Watchdog] Teleport stuck over 30s, resetting..." )D4() end
+            if h.teleporting and os.clock ()-(h.stateTime or 0 )>60 then t( "[Watchdog] Teleport stuck over 60s, resetting..." )D4() end
+            local ch=o.Character local hh=ch and ch:FindFirstChildOfClass ( "Humanoid" )
+            if hh and (hh.WalkSpeed or 16 )<= 0 then hh.WalkSpeed = 16 end
+            if h.pureTweenFarm and h.autoFarmLoop then
+                if h.lastFarmMode == "WARP" then
+                    h.pureTweenFarm = false if x4 then pcall(function(...) x4( false ) end) end
+                    t( "[Farm] Both modes ON, keeping Teleport" )
+                else
+                    h.autoFarmLoop = false if W4 then pcall(function(...) W4( false ) end) end
+                    t( "[Farm] Both modes ON, keeping Tween" )
+                end
+            end
             if not h.autoTreadmill then return end
             local busy=h.teleporting or h.glidingToTarget or h.securingEgg or h.delivering or h.isReturning or h.holdingEggForGuard
             local onMill=L4()
