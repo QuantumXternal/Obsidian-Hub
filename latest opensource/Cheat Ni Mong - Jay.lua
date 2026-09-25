@@ -282,7 +282,9 @@ local W=T()h={[ "godmode" ]= true ,[ "autoGlide" ]= true ,[ "autoHatch" ]= false
 [ "gui" ]=nil;
 [ "alive" ]= true ,[ "plot" ]=nil;
 [ "pen" ]=nil,[ "origin" ]=nil;
-[ "tread" ]=nil}
+ [ "tread" ]=nil,[ "justFailedMain" ]= false ,[ "carryN" ]= 0 }
+if next(h.sellEggRarities or{})==nil then h.sellEggRarities ={Common=true,Uncommon=true,Rare=true,Epic=true,Legendary=true,Mythic=true} end
+if next(h.sellPetRarities or{})==nil then h.sellPetRarities ={Common=true,Uncommon=true,Rare=true,Epic=true,Legendary=true,Mythic=true} end
 
 
 local m
@@ -1150,10 +1152,14 @@ b4=function(e,...) h.godmode =e
             y.Health = 100
         end
     end
+    h.godmodeCache =h.godmodeCache or{}
     for r,y in ipairs(r:GetDescendants())do
         if y:IsA( "BasePart" )then
             if e then
+                if h.godmodeCache[y]==nil then h.godmodeCache[y]={y.CanTouch ,y.CanCollide} end
                 y.CanTouch = false y.CanCollide = false
+            elseif h.godmodeCache[y]then
+                y.CanTouch =h.godmodeCache[y][1]y.CanCollide =h.godmodeCache[y][2]h.godmodeCache[y]=nil
             end
         end
     end
@@ -3134,6 +3140,10 @@ U4=function(e,u,w,j,...)
     if not a or not V then
         return false
     end
+    if V.Health ~=nil and V.Health <= 0 then
+        h.securingEgg = false h.holdingEggForGuard = false
+        return false
+    end
     h.securingEgg = true h.isReturning = false h.stateTime =os.clock ()h.holdingEggForGuard = true
     local s=u.Position V4(s, 14 )h.currentTargetModel =w h.targetPosition =s a.AssemblyLinearVelocity =Vector3.zero a.AssemblyAngularVelocity =Vector3.zero Z4(k)pcall(function(...) o:RequestStreamAroundAsync(s)
     end
@@ -3177,7 +3187,7 @@ U4=function(e,u,w,j,...)
             end
         end
         k:PivotTo(u*CFrame.new ( 0 , 0.4 , 0 ))d4(w,s)
-        if e and i and os.clock ()-(h.lastCarry or 0 )>0.5 then h.lastCarry =os.clock ()
+        if e and i and os.clock ()-(h.lastCarry or 0 )>0.5 then h.lastCarry =os.clock ()h.carryN =(h.carryN or 0 )+ 1
             task.spawn (function(...) pcall(function(...)
                     if i:IsA( "RemoteFunction" )then
                         i:InvokeServer({[ "Uid" ]=e})
@@ -3237,7 +3247,7 @@ U4=function(e,u,w,j,...)
             break
         end
         k:PivotTo(u*CFrame.new ( 0 , 0.4 , 0 ))d4(w,s)
-        if e and i and os.clock ()-(h.lastCarry or 0 )>0.5 then h.lastCarry =os.clock ()
+        if e and i and os.clock ()-(h.lastCarry or 0 )>0.5 then h.lastCarry =os.clock ()h.carryN =(h.carryN or 0 )+ 1
             task.spawn (function(...) pcall(function(...)
                     if i:IsA( "RemoteFunction" )then
                         i:InvokeServer({[ "Uid" ]=e})
@@ -3281,6 +3291,10 @@ l4=function(e,u,...)
         D4()
         return false
     end
+    if k.Health ~=nil and k.Health <= 0 then
+        D4()
+        return false
+    end
     if k then
         k:UnequipTools()
     end
@@ -3307,6 +3321,18 @@ l4=function(e,u,...)
     end
     local s=select( 2 ,e4())
     if not s then
+        local bkTool,bkUid=r4()
+        if bkTool then
+            pcall(function(...) k:EquipTool(bkTool) end)task.wait ( 0.15 )
+            s=select( 2 ,e4())
+            if s then h.justFailedMain = false h.statusText = "[Decoy] Re-equipped backpack egg, skipping Lake..." H( "[Snipe] Reusing backpack decoy (no Lake trip)." ) end
+        end
+    end
+    if not s then
+        if h.justFailedMain then
+            t( "[Snipe] Cooling down after failed main (no decoy held). Retrying shortly..." )h.statusText = "Cooling down (last main failed)..." task.wait ( 3 )D4()
+            return false
+        end
         local e=P4()
         if not e then
             t( "[-] Lake egg not found" )h.statusText = "[-] No Lake egg found" D4()
@@ -3339,7 +3365,7 @@ l4=function(e,u,...)
                 return false
             end
             d4(e.Model ,e.Position )
-            if e.Uid and i and os.clock ()-(h.lastCarry or 0 )>0.5 then h.lastCarry =os.clock ()
+            if e.Uid and i and os.clock ()-(h.lastCarry or 0 )>0.5 then h.lastCarry =os.clock ()h.carryN =(h.carryN or 0 )+ 1
                 task.spawn (function(...) pcall(function(...)
                         if i:IsA( "RemoteFunction" )then
                             i:InvokeServer({[ "Uid" ]=e.Uid })
@@ -3358,6 +3384,7 @@ l4=function(e,u,...)
             t( "[-] Lake egg pickup failed" )h.statusText = "[-] Lake pickup failed" D4()
             return false
         end
+        h.justFailedMain = false
     end
     h.statusText = "[3/7] Pre-streaming Target..." pcall(function(...) o:RequestStreamAroundAsync(H)
     end
@@ -3451,10 +3478,12 @@ l4=function(e,u,...)
         end
     end
     if not l then
-        t( "[-] Guard Strike criteria not met" )h.statusText = "[-] Guard Strike criteria failed" D4()
+        t( "[-] Guard Strike criteria not met" )h.statusText = "[-] Guard Strike failed, returning to base..."
+        if V then X4[V]=os.clock ()+ 30 end
+        h.justFailedMain = true pcall(u4)pcall(function(...) Q4(h.glideSpeed or 600 ,u) end)pcall(u4)h.isReturning = false h.delivering = false D4()
         return false
     else
-        h.statusText = "[7/7] Target Secured! Stashing into Backpack..." h.teleporting = false pcall(u4)
+        h.statusText = "[7/7] Target Secured! Stashing into Backpack..." h.teleporting = false h.justFailedMain = false pcall(u4)
         return true
     end
 end
@@ -3751,11 +3780,40 @@ task.spawn (function(...)
     while h.alive do
         task.wait ( 3 )
         if h.autoSellEgg then
-            pcall(SellScan,{ "EggInventory" },h.sellEggRarities)
+            local ok,n=pcall(SellScan,{ "EggInventory" },h.sellEggRarities)
+            if ok then
+                if (n or 0)>0 then h.statusText =string.format ( "[AutoSell] Sold %d egg(s)" ,n)H(string.format ( "[AutoSell] Sold %d egg(s)" ,n)) end
+            else
+                h.statusText = "[AutoSell] Egg scan error" t( "[AutoSell] Egg scan error:" ,tostring(n))
+            end
         end
         if h.autoSellPet then
-            pcall(SellScan,{ "PetInventory" , "Pets" , "PetSatchel" },h.sellPetRarities)
+            local ok,n=pcall(SellScan,{ "PetInventory" , "Pets" , "PetSatchel" },h.sellPetRarities)
+            if ok then
+                if (n or 0)>0 then h.statusText =string.format ( "[AutoSell] Sold %d pet(s)" ,n)H(string.format ( "[AutoSell] Sold %d pet(s)" ,n)) end
+            else
+                h.statusText = "[AutoSell] Pet scan error" t( "[AutoSell] Pet scan error:" ,tostring(n))
+            end
         end
+    end
+end
+)task.spawn (function(...)
+    while h.alive do
+        task.wait ( 60 )
+        local n=h.carryN or 0
+        t(string.format ( "[CarryRate] %d carry invokes in last 60s" ,n))
+        h.carryN = 0
+    end
+end
+)task.spawn (function(...)
+    while h.alive do
+        task.wait ( 0.25 )
+        pcall(function(...)
+            if (h.pureTweenFarm or h.autoFarmLoop) and not (h.securingEgg or h.teleporting or h.isBatchPlacing) then
+                local c=o.Character local hr=c and c:FindFirstChild ( "HumanoidRootPart" )
+                if hr then d4(nil,hr.Position) end
+            end
+        end)
     end
 end
 )task.spawn (function(...) while h.alive do if h.autoHatch and(not h.securingEgg and(not h.teleporting and not h.isHatching ))then
@@ -4625,7 +4683,7 @@ local function oM(...)
         [ "Icon" ]= "solar:box-minimalistic-bold" })Ok=p:Tab({[ "Title" ]=P.Tabs.EggSelect or "Egg Selection" ;
         [ "Icon" ]= "lucide:egg" })Yk=p:Tab({[ "Title" ]=P.Tabs.Character ;
         [ "Icon" ]= "solar:user-bold" })Tk=p:Tab({[ "Title" ]=P.Tabs.Settings ;
-        [ "Icon" ]= "solar:settings-bold" })SellTab=p:Tab({[ "Title" ]= "Auto Sell" ; [ "Icon" ]= "solar:box-minimalistic-bold" })Fk.secSellEgg =SellTab:Section({[ "Title" ]= "Auto Sell Egg" })Fk.togSellEgg =SellTab:Toggle({[ "Title" ]= "Auto Sell Eggs" ,[ "Desc" ]= "Automatically sell checked egg rarities" ,[ "Icon" ]= "solar:star-bold" ,[ "Value" ]=h.autoSellEgg ,[ "Callback" ]=function(e,...) h.autoSellEgg =e x() j({[ "Title" ]= "Auto Sell Eggs" ,[ "Content" ]=e and "Auto Sell Eggs enabled" or "Auto Sell Eggs disabled" ,[ "Icon" ]=e and "check-circle" or "x-circle" }) end })Fk.dropSellEgg =SellTab:Dropdown({[ "Title" ]= "Egg Rarities To Sell" ,[ "Desc" ]= "Only checked rarities get sold" ,[ "Values" ]={ "Divine (Tier 6)" , "Eternal (Tier 5)" , "Secret (Tier 4)" , "Cosmic (Tier 3)" , "Mythic (Tier 2)" , "Legendary (Tier 1)" , "Epic" , "Rare" , "Uncommon" , "Common" },[ "Value" ]={},[ "Multi" ]= true ,[ "Callback" ]=function(e,...) local r={} local function y(e2,...) local s=string.lower (tostring(e2 or "" )) for _,u in ipairs(X)do if string.find (s,string.lower (u))then r[u]= true break end end end if type(e)== "table" then for _,v in pairs(e)do y(v) end elseif type(e)== "string" then y(e) end h.sellEggRarities =r x() end })Fk.secSellPet =SellTab:Section({[ "Title" ]= "Auto Sell Pet" })Fk.togSellPet =SellTab:Toggle({[ "Title" ]= "Auto Sell Pets" ,[ "Desc" ]= "Automatically sell checked pet rarities" ,[ "Icon" ]= "solar:star-bold" ,[ "Value" ]=h.autoSellPet ,[ "Callback" ]=function(e,...) h.autoSellPet =e x() j({[ "Title" ]= "Auto Sell Pets" ,[ "Content" ]=e and "Auto Sell Pets enabled" or "Auto Sell Pets disabled" ,[ "Icon" ]=e and "check-circle" or "x-circle" }) end })Fk.dropSellPet =SellTab:Dropdown({[ "Title" ]= "Pet Rarities To Sell" ,[ "Desc" ]= "Only checked rarities get sold" ,[ "Values" ]={ "Divine (Tier 6)" , "Eternal (Tier 5)" , "Secret (Tier 4)" , "Cosmic (Tier 3)" , "Mythic (Tier 2)" , "Legendary (Tier 1)" , "Epic" , "Rare" , "Uncommon" , "Common" },[ "Value" ]={},[ "Multi" ]= true ,[ "Callback" ]=function(e,...) local r={} local function y(e2,...) local s=string.lower (tostring(e2 or "" )) for _,u in ipairs(X)do if string.find (s,string.lower (u))then r[u]= true break end end end if type(e)== "table" then for _,v in pairs(e)do y(v) end elseif type(e)== "string" then y(e) end h.sellPetRarities =r x() end })Fk.secModes =hk:Section({[ "Title" ]=P.Farm.SecModes })
+        [ "Icon" ]= "solar:settings-bold" })SellTab=p:Tab({[ "Title" ]= "Auto Sell" ; [ "Icon" ]= "solar:box-minimalistic-bold" })Fk.secSellEgg =SellTab:Section({[ "Title" ]= "Auto Sell Egg" })Fk.togSellEgg =SellTab:Toggle({[ "Title" ]= "Auto Sell Eggs" ,[ "Desc" ]= "Automatically sell checked egg rarities" ,[ "Icon" ]= "solar:star-bold" ,[ "Value" ]=h.autoSellEgg ,[ "Callback" ]=function(e,...) h.autoSellEgg =e x() j({[ "Title" ]= "Auto Sell Eggs" ,[ "Content" ]=e and "Auto Sell Eggs enabled" or "Auto Sell Eggs disabled" ,[ "Icon" ]=e and "check-circle" or "x-circle" }) end })Fk.dropSellEgg =SellTab:Dropdown({[ "Title" ]= "Egg Rarities To Sell" ,[ "Desc" ]= "Only checked rarities get sold" ,[ "Values" ]={ "Divine (Tier 6)" , "Eternal (Tier 5)" , "Secret (Tier 4)" , "Cosmic (Tier 3)" , "Mythic (Tier 2)" , "Legendary (Tier 1)" , "Epic" , "Rare" , "Uncommon" , "Common" },[ "Value" ]={ "Mythic (Tier 2)" , "Legendary (Tier 1)" , "Epic" , "Rare" , "Uncommon" , "Common" },[ "Multi" ]= true ,[ "Callback" ]=function(e,...) local r={} local function y(e2,...) local s=string.lower (tostring(e2 or "" )) for _,u in ipairs(X)do if string.find (s,string.lower (u))then r[u]= true break end end end if type(e)== "table" then for _,v in pairs(e)do y(v) end elseif type(e)== "string" then y(e) end h.sellEggRarities =r x() end })Fk.secSellPet =SellTab:Section({[ "Title" ]= "Auto Sell Pet" })Fk.togSellPet =SellTab:Toggle({[ "Title" ]= "Auto Sell Pets" ,[ "Desc" ]= "Automatically sell checked pet rarities" ,[ "Icon" ]= "solar:star-bold" ,[ "Value" ]=h.autoSellPet ,[ "Callback" ]=function(e,...) h.autoSellPet =e x() j({[ "Title" ]= "Auto Sell Pets" ,[ "Content" ]=e and "Auto Sell Pets enabled" or "Auto Sell Pets disabled" ,[ "Icon" ]=e and "check-circle" or "x-circle" }) end })Fk.dropSellPet =SellTab:Dropdown({[ "Title" ]= "Pet Rarities To Sell" ,[ "Desc" ]= "Only checked rarities get sold" ,[ "Values" ]={ "Divine (Tier 6)" , "Eternal (Tier 5)" , "Secret (Tier 4)" , "Cosmic (Tier 3)" , "Mythic (Tier 2)" , "Legendary (Tier 1)" , "Epic" , "Rare" , "Uncommon" , "Common" },[ "Value" ]={ "Mythic (Tier 2)" , "Legendary (Tier 1)" , "Epic" , "Rare" , "Uncommon" , "Common" },[ "Multi" ]= true ,[ "Callback" ]=function(e,...) local r={} local function y(e2,...) local s=string.lower (tostring(e2 or "" )) for _,u in ipairs(X)do if string.find (s,string.lower (u))then r[u]= true break end end end if type(e)== "table" then for _,v in pairs(e)do y(v) end elseif type(e)== "string" then y(e) end h.sellPetRarities =r x() end })Fk.secModes =hk:Section({[ "Title" ]=P.Farm.SecModes })
         local N= false
         local U=nil
         local l=nil Fk.togTween =hk:Toggle({[ "Title" ]=P.Farm.TweenTitle ,[ "Desc" ]=P.Farm.TweenDesc ,[ "Icon" ]= "solar:compass-bold" ;
@@ -4814,7 +4872,7 @@ local function oM(...)
         end
         })Fk.secFlight =Yk:Section({[ "Title" ]=P.Character.SecFlight })Fk.sliderSpeed =Yk:Slider({[ "Title" ]=P.Character.SpeedTitle ,[ "Desc" ]=P.Character.SpeedDesc ,[ "Step" ]= 25 ,[ "Value" ]={[ "Min" ]= 100 ;
         [ "Max" ]= 1000 ;
-        [ "Default" ]=h.glideSpeed or 600 },[ "Callback" ]=function(e,...) h.glideSpeed =e Y(e) end })Fk.sliderReturnHeight =Yk:Slider({[ "Title" ]= "Return Height" ,[ "Desc" ]= "Height used when returning to base (1-100). Outbound flight ignores it." ,[ "Step" ]= 5 ,[ "Value" ]={[ "Min" ]= 1 ;[ "Max" ]= 100 ;[ "Default" ]=h.returnHeight or 70 },[ "Callback" ]=function(e,...) h.returnHeight =math.clamp (e or 70 , 1 , 100 )x() end })Fk.secDashboard =Tk:Section({[ "Title" ]=P.Settings.SecDashboard })Fk.paraLiveDash =Tk:Paragraph({[ "Title" ]=P.Settings.DashTitle ;
+        [ "Default" ]=h.glideSpeed or 600 },[ "Callback" ]=function(e,...) h.glideSpeed =e Y(e) end })Fk.sliderReturnHeight =Yk:Slider({[ "Title" ]= "Return Height" ,[ "Desc" ]= "Height used when returning to base (1-100). Outbound flight ignores it." ,[ "Step" ]= 5 ,[ "Value" ]={[ "Min" ]= 1 ;[ "Max" ]= 100 ;[ "Default" ]=h.returnHeight or 70 },[ "Callback" ]=function(e,...) h.returnHeight =math.clamp (e or 70 , 1 , 100 )x()h.statusText =string.format ( "Return Height: %d" ,h.returnHeight ) end })Fk.secDashboard =Tk:Section({[ "Title" ]=P.Settings.SecDashboard })Fk.paraLiveDash =Tk:Paragraph({[ "Title" ]=P.Settings.DashTitle ;
         [ "Desc" ]=string.format ( "Status: Ready\nFarm Mode: Idle\nCarried Eggs: 0\nFlight Speed: %d Studs/s" ,h.glideSpeed or 600 )})Fk.secUI =Tk:Section({[ "Title" ]=P.Settings.SecUI })Fk.dropLang =Tk:Dropdown({[ "Title" ]=P.Settings.LangTitle ,[ "Values" ]={ "English" , "Thai" },[ "Value" ]=(Xk== "EN" and "English" or "Thai" ),[ "Callback" ]=function(e,...)
             local r=(e== "Thai" )and "TH" or "EN"
             if r~=Xk then
@@ -5099,7 +5157,7 @@ local function oM(...)
     end
     )m.MouseButton1Click :Connect(function(...) h.glideSpeed =math.min ( 1000 ,((h.glideSpeed or 600 ))+ 25 )T.Text =string.format ( "%d Studs/s" ,h.glideSpeed )Y(h.glideSpeed )
     end
-    )local F2=Instance.new ( "Frame" )F2.Size =UDim2.new ( 1 , 0 , 0 , 48 )F2.BackgroundColor3 =t F2.LayoutOrder = 41.5 F2.Parent =n;(Instance.new ( "UICorner" ,F2)).CornerRadius =UDim.new ( 0 , 8 )local O2=Instance.new ( "TextLabel" )O2.Size =UDim2.new ( 1 , -130 , 0 , 18 )O2.Position =UDim2.new ( 0 , 10 , 0 , 6 )O2.BackgroundTransparency = 1 O2.Text = "Return Height" O2.TextColor3 =B O2.TextSize = 13 O2.Font =Enum.Font.GothamBold O2.TextXAlignment =Enum.TextXAlignment.Left O2.AutoLocalize = false O2.Parent =F2 local T2=Instance.new ( "TextLabel" )T2.Size =UDim2.new ( 0 , 70 , 0 , 24 )T2.Position =UDim2.new ( 1 , -80 , 0.5 , -12 )T2.BackgroundColor3 =V T2.Text =string.format ( "%d" ,h.returnHeight or 70 )T2.TextColor3 =Color3.fromRGB(232, 160, 181)T2.TextSize = 11 T2.Font =Enum.Font.GothamBold T2.AutoLocalize = false T2.Parent =F2;(Instance.new ( "UICorner" ,T2)).CornerRadius =UDim.new ( 0 , 6 )local W2=Instance.new ( "TextButton" )W2.Size =UDim2.new ( 0 , 24 , 0 , 24 )W2.Position =UDim2.new ( 1 , -110 , 0.5 , -12 )W2.BackgroundColor3 =s W2.Text = "-" W2.TextColor3 =B W2.TextSize = 14 W2.Font =Enum.Font.GothamBold W2.Parent =F2;(Instance.new ( "UICorner" ,W2)).CornerRadius =UDim.new ( 0 , 6 )local m2=Instance.new ( "TextButton" )m2.Size =UDim2.new ( 0 , 24 , 0 , 24 )m2.Position =UDim2.new ( 1 , -138 , 0.5 , -12 )m2.BackgroundColor3 =s m2.Text = "+" m2.TextColor3 =B m2.TextSize = 14 m2.Font =Enum.Font.GothamBold m2.Parent =F2;(Instance.new ( "UICorner" ,m2)).CornerRadius =UDim.new ( 0 , 6 )W2.MouseButton1Click :Connect(function(...) h.returnHeight =math.max ( 1 ,((h.returnHeight or 70 ))- 5 )T2.Text =string.format ( "%d" ,h.returnHeight )x() end )m2.MouseButton1Click :Connect(function(...) h.returnHeight =math.min ( 100 ,((h.returnHeight or 70 ))+ 5 )T2.Text =string.format ( "%d" ,h.returnHeight )x() end )A( "Reset Character State" , "Clear velocity, cancel push & unfreeze" ,Color3.fromRGB(145, 48, 73), 42 ,function(...) pcall(D4)pcall(u4)
+    )local F2=Instance.new ( "Frame" )F2.Size =UDim2.new ( 1 , 0 , 0 , 48 )F2.BackgroundColor3 =t F2.LayoutOrder = 41.5 F2.Parent =n;(Instance.new ( "UICorner" ,F2)).CornerRadius =UDim.new ( 0 , 8 )local O2=Instance.new ( "TextLabel" )O2.Size =UDim2.new ( 1 , -130 , 0 , 18 )O2.Position =UDim2.new ( 0 , 10 , 0 , 6 )O2.BackgroundTransparency = 1 O2.Text = "Return Height" O2.TextColor3 =B O2.TextSize = 13 O2.Font =Enum.Font.GothamBold O2.TextXAlignment =Enum.TextXAlignment.Left O2.AutoLocalize = false O2.Parent =F2 local T2=Instance.new ( "TextLabel" )T2.Size =UDim2.new ( 0 , 70 , 0 , 24 )T2.Position =UDim2.new ( 1 , -80 , 0.5 , -12 )T2.BackgroundColor3 =V T2.Text =string.format ( "%d" ,h.returnHeight or 70 )T2.TextColor3 =Color3.fromRGB(232, 160, 181)T2.TextSize = 11 T2.Font =Enum.Font.GothamBold T2.AutoLocalize = false T2.Parent =F2;(Instance.new ( "UICorner" ,T2)).CornerRadius =UDim.new ( 0 , 6 )local W2=Instance.new ( "TextButton" )W2.Size =UDim2.new ( 0 , 24 , 0 , 24 )W2.Position =UDim2.new ( 1 , -110 , 0.5 , -12 )W2.BackgroundColor3 =s W2.Text = "-" W2.TextColor3 =B W2.TextSize = 14 W2.Font =Enum.Font.GothamBold W2.Parent =F2;(Instance.new ( "UICorner" ,W2)).CornerRadius =UDim.new ( 0 , 6 )local m2=Instance.new ( "TextButton" )m2.Size =UDim2.new ( 0 , 24 , 0 , 24 )m2.Position =UDim2.new ( 1 , -138 , 0.5 , -12 )m2.BackgroundColor3 =s m2.Text = "+" m2.TextColor3 =B m2.TextSize = 14 m2.Font =Enum.Font.GothamBold m2.Parent =F2;(Instance.new ( "UICorner" ,m2)).CornerRadius =UDim.new ( 0 , 6 )W2.MouseButton1Click :Connect(function(...) h.returnHeight =math.max ( 1 ,((h.returnHeight or 70 ))- 5 )T2.Text =string.format ( "%d" ,h.returnHeight )x()h.statusText =string.format ( "Return Height: %d" ,h.returnHeight ) end )m2.MouseButton1Click :Connect(function(...) h.returnHeight =math.min ( 100 ,((h.returnHeight or 70 ))+ 5 )T2.Text =string.format ( "%d" ,h.returnHeight )x()h.statusText =string.format ( "Return Height: %d" ,h.returnHeight ) end )A( "Reset Character State" , "Clear velocity, cancel push & unfreeze" ,Color3.fromRGB(145, 48, 73), 42 ,function(...) pcall(D4)pcall(u4)
     end
     )A( "Unload Script" , "Destroy UI and stop all background loops" ,Color3.fromRGB(145, 48, 73), 43 ,function(...) aM()
     end
